@@ -1,8 +1,10 @@
 # Liga del Saber — Backend
 
-<p align="center">
+<p align="center" >
   <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
+  <img src="../backend/public/photos/logo.jpeg" width="120" alt="Nest Logo" />
 </p>
+
 
 
 NestJS backend for **Liga del Saber**, a knockout knowledge-tournament platform where each match is a free-text quiz graded by an AI evaluator. Full product/architecture docs live at the repo root — see [Where to look next](#where-to-look-next).
