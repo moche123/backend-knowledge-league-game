@@ -10,5 +10,6 @@ export class PublicUserDto {
 
 export class AuthResponseDto {
   accessToken!: string;
+  refreshToken!: string;
   user!: PublicUserDto;
 }

@@ -1,4 +1,9 @@
-import { Column, CreateDateColumn, Entity, PrimaryGeneratedColumn } from 'typeorm';
+import {
+  Column,
+  CreateDateColumn,
+  Entity,
+  PrimaryGeneratedColumn,
+} from 'typeorm';
 
 export enum UserRole {
   PLAYER = 'player',
@@ -26,4 +31,16 @@ export class User {
 
   @CreateDateColumn({ type: 'timestamptz', name: 'created_at' })
   createdAt!: Date;
+
+  // Hash bcrypt del refresh token vigente (rotación en cada uso) + su expiración.
+  // Nulos si el usuario nunca hizo login o cerró sesión.
+  @Column({ type: 'text', name: 'refresh_token_hash', nullable: true })
+  refreshTokenHash!: string | null;
+
+  @Column({
+    type: 'timestamptz',
+    name: 'refresh_token_expires_at',
+    nullable: true,
+  })
+  refreshTokenExpiresAt!: Date | null;
 }
