@@ -34,7 +34,7 @@ Per the roadmap's MVP path, this backend is intentionally a **single modular Nes
 
 There is deliberately **no `question` module** — questions used to live in a shared per-event bank, which turned out to be the wrong model (it let a player who already played leak upcoming questions to one who hadn't). Each match now generates and owns its own questions when it's scheduled; see `CLAUDE.md` for the full history of that redesign.
 
-For the exact, currently-correct list of every endpoint with working `curl` examples, see **`curl-comands.md`** in this directory — it's updated every time an endpoint is added or changed, and is more trustworthy than prose summaries (including this one) if they ever disagree.
+For the exact, currently-correct list of every endpoint with working `curl` examples, see **`curl-commands.md`** in this directory — it's updated every time an endpoint is added or changed, and is more trustworthy than prose summaries (including this one) if they ever disagree.
 
 ## Auth module
 
@@ -103,7 +103,7 @@ See `.env.example`. Required (the app fails fast on boot if any is missing):
 ## Where to look next
 
 - `../CLAUDE.md` — business rules, data model, scoring formula, architecture decisions, and a running log of design corrections made while building this backend (worth reading before assuming an older doc is still accurate).
-- `curl-comands.md` — every implemented endpoint with a working `curl` example, kept current.
+- `curl-commands.md` — every implemented endpoint with a working `curl` example, kept current.
 - `../liga-del-saber-roadmap.md` — full roadmap, MVP scope (section 6), target microservices architecture (section 5).
 - `../schema.sql` / `../schema.dbml` — current Postgres schema (monolith draft; will be split per service when this backend moves to microservices).
 - `../knowledge/nestjs.md` — NestJS theory notes, including the microservices patterns this project will migrate to later.
