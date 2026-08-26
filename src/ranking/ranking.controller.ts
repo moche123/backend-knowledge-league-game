@@ -7,8 +7,8 @@ import {
 } from '@nestjs/swagger';
 import { RankingService } from './ranking.service';
 
-// GET /ranking                    — autenticado, leaderboard global
-// GET /ranking/events/:eventId    — autenticado, leaderboard de un evento puntual
+// GET /ranking                    — authenticated, global leaderboard
+// GET /ranking/events/:eventId    — authenticated, leaderboard for one specific event
 @ApiTags('ranking')
 @ApiBearerAuth('access-token')
 @Controller('ranking')

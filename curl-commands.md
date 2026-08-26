@@ -1,10 +1,10 @@
 # Liga del Saber — API curl reference
 
-Ejemplos `curl` para cada endpoint implementado. Reemplazá los placeholders (`PASTE_..._HERE`) por valores reales — la mayoría de los flujos empiezan con `POST /auth/login` para conseguir el `accessToken`.
+`curl` examples for every implemented endpoint. Replace the placeholders (`PASTE_..._HERE`) with real values — most flows start with `POST /auth/login` to get the `accessToken`.
 
-> Se actualiza cada vez que se agrega o cambia un endpoint — más confiable que cualquier resumen en prosa si llegan a no coincidir.
+> Updated every time an endpoint is added or changed — more trustworthy than any prose summary if they ever disagree.
 
-## Índice
+## Index
 
 - [Authentication](#authentication)
 - [Tournament](#tournament)
@@ -28,7 +28,7 @@ curl --data "email=PASTE_EMAIL_HERE&password=PASTE_PASSWORD_HERE" \
 
 #### Register
 
-Siempre crea rol `player` — el primer admin se bootstrapea a mano en la DB.
+Always creates role `player` — the first admin is bootstrapped by hand in the DB.
 
 ```bash
 curl --data "name=PASTE_NAME_HERE&email=PASTE_EMAIL_HERE&password=PASTE_PASSWORD_HERE" \
@@ -37,7 +37,7 @@ curl --data "name=PASTE_NAME_HERE&email=PASTE_EMAIL_HERE&password=PASTE_PASSWORD
 
 #### Refresh token
 
-Usa el `refreshToken` devuelto por login/register. Rota en cada uso — el viejo deja de servir.
+Uses the `refreshToken` returned by login/register. Rotates on every use — the old one stops working.
 
 ```bash
 curl --data "refreshToken=PASTE_REFRESH_TOKEN_HERE" \
@@ -46,7 +46,7 @@ curl --data "refreshToken=PASTE_REFRESH_TOKEN_HERE" \
 
 #### Logout
 
-Requiere el `accessToken` vigente — invalida el refresh token guardado.
+Requires the current `accessToken` — invalidates the stored refresh token.
 
 ```bash
 curl -X POST -H "Authorization: Bearer PASTE_ACCESS_TOKEN_HERE" \
@@ -60,18 +60,18 @@ curl -X POST -H "Authorization: Bearer PASTE_ACCESS_TOKEN_HERE" \
 ```bash
 curl -X POST -H "Content-Type: application/json" \
   -H "Authorization: Bearer PASTE_ACCESS_TOKEN_HERE" \
-  -d '{"name":"Copa Saber","theme":"historia","startDate":"2026-09-01T00:00:00Z","endDate":"2026-09-15T00:00:00Z","maxPlayers":8,"questionsPerMatch":5}' \
+  -d '{"name":"Copa Saber","theme":"history","startDate":"2026-09-01T00:00:00Z","endDate":"2026-09-15T00:00:00Z","maxPlayers":8,"questionsPerMatch":5}' \
   http://localhost:3000/tournament/events
 ```
 
-#### List events — autenticado
+#### List events — authenticated
 
 ```bash
 curl -H "Authorization: Bearer PASTE_ACCESS_TOKEN_HERE" \
   http://localhost:3000/tournament/events
 ```
 
-#### Get event by id — autenticado
+#### Get event by id — authenticated
 
 ```bash
 curl -H "Authorization: Bearer PASTE_ACCESS_TOKEN_HERE" \
@@ -96,14 +96,14 @@ curl -X DELETE -H "Authorization: Bearer PASTE_ACCESS_TOKEN_HERE" \
 
 ## Registrations
 
-#### Register self — jugador se inscribe
+#### Register self — player registers themself
 
 ```bash
 curl -X POST -H "Authorization: Bearer PASTE_ACCESS_TOKEN_HERE" \
   http://localhost:3000/tournament/events/PASTE_EVENT_ID_HERE/registrations
 ```
 
-#### List registrations — autenticado
+#### List registrations — authenticated
 
 ```bash
 curl -H "Authorization: Bearer PASTE_ACCESS_TOKEN_HERE" \
@@ -112,7 +112,7 @@ curl -H "Authorization: Bearer PASTE_ACCESS_TOKEN_HERE" \
 
 #### Unregister self
 
-Solo mientras el evento sigue `registration_open`.
+Only while the event is still `registration_open`.
 
 ```bash
 curl -X DELETE -H "Authorization: Bearer PASTE_ACCESS_TOKEN_HERE" \
@@ -137,38 +137,38 @@ curl -X DELETE -H "Authorization: Bearer PASTE_ACCESS_TOKEN_HERE" \
 
 #### Draw — admin
 
-Cierra inscripción, arma el árbol completo de fases y sortea la primera (requiere exactamente `maxPlayers` inscritos).
+Closes registration, builds the full stage tree, and draws the first one (requires exactly `maxPlayers` registered).
 
 ```bash
 curl -X POST -H "Authorization: Bearer PASTE_ACCESS_TOKEN_HERE" \
   http://localhost:3000/tournament/events/PASTE_EVENT_ID_HERE/stages/draw
 ```
 
-#### List stages + matches — autenticado
+#### List stages + matches — authenticated
 
-Ver el bracket completo.
+View the full bracket.
 
 ```bash
 curl -H "Authorization: Bearer PASTE_ACCESS_TOKEN_HERE" \
   http://localhost:3000/tournament/events/PASTE_EVENT_ID_HERE/stages
 ```
 
-> Las fases siguientes (semis, final, 3er puesto) se sortean solas — cuando cierra la última partida pendiente de una fase, aparecen matches `pending` nuevos en la fase siguiente al volver a pedir este mismo `GET`. Sin endpoint nuevo, es automático.
+> Later stages (semis, final, third place) draw themselves — when a stage's last pending match closes, new `pending` matches appear in the next stage the next time you call this same `GET`. No new endpoint, it's automatic.
 
 ## Matches
 
-#### Get match — autenticado
+#### Get match — authenticated
 
 ```bash
 curl -H "Authorization: Bearer PASTE_ACCESS_TOKEN_HERE" \
   http://localhost:3000/tournament/events/PASTE_EVENT_ID_HERE/matches/PASTE_MATCH_ID_HERE
 ```
 
-> Trae `score_a`/`score_b`/`winner_id` ya calculados (fórmula 70/30) una vez que el match cierra (`closed` o `walkover`) — sin endpoint nuevo, es automático.
+> Includes `score_a`/`score_b`/`winner_id` already computed (70/30 formula) once the match closes (`closed` or `walkover`) — no new endpoint, it's automatic.
 
-#### Schedule / reagendar match — admin
+#### Schedule / reschedule match — admin
 
-Fija hora de inicio y fin estimada. Genera (o **regenera**, si ya tenía) las preguntas de ESTE match por IA (Moonshot) al vuelo — requiere `MOONSHOT_API_KEY` en `.env`.
+Sets the estimated start and end time. Generates (or **regenerates**, if it already had one) this match's questions via AI (Moonshot) on the fly — requires `MOONSHOT_API_KEY` in `.env`.
 
 ```bash
 curl -X PATCH -H "Content-Type: application/json" \
@@ -179,7 +179,7 @@ curl -X PATCH -H "Content-Type: application/json" \
 
 #### Edit participants — admin
 
-Cambia uno o los dos jugadores, solo mientras el match sigue `pending`.
+Changes one or both players, only while the match is still `pending`.
 
 ```bash
 curl -X PATCH -H "Content-Type: application/json" \
@@ -188,36 +188,36 @@ curl -X PATCH -H "Content-Type: application/json" \
   http://localhost:3000/tournament/events/PASTE_EVENT_ID_HERE/matches/PASTE_MATCH_ID_HERE/participants
 ```
 
-#### Start match — admin o árbitro
+#### Start match — admin or referee
 
-Falla si todavía no llegó `scheduledStartAt`, o si el match no tiene preguntas generadas (reagendalo primero).
+Fails if `scheduledStartAt` hasn't arrived yet, or if the match has no generated questions (reschedule it first).
 
 ```bash
 curl -X POST -H "Authorization: Bearer PASTE_ACCESS_TOKEN_HERE" \
   http://localhost:3000/tournament/events/PASTE_EVENT_ID_HERE/matches/PASTE_MATCH_ID_HERE/start
 ```
 
-#### End match — admin o árbitro
+#### End match — admin or referee
 
-Puede cerrarlo antes de lo estimado.
+Can close it earlier than estimated.
 
 ```bash
 curl -X POST -H "Authorization: Bearer PASTE_ACCESS_TOKEN_HERE" \
   http://localhost:3000/tournament/events/PASTE_EVENT_ID_HERE/matches/PASTE_MATCH_ID_HERE/end
 ```
 
-#### Get current question — jugador, solo los 2 del match
+#### Get current question — player, only the match's 2
 
-Pregunta activa + deadline, sin rúbrica.
+Active question + deadline, without the rubric.
 
 ```bash
 curl -H "Authorization: Bearer PASTE_ACCESS_TOKEN_HERE" \
   http://localhost:3000/tournament/events/PASTE_EVENT_ID_HERE/matches/PASTE_MATCH_ID_HERE/current-question
 ```
 
-#### Submit answer — jugador, solo los 2 del match
+#### Submit answer — player, only the match's 2
 
-Responde la pregunta activa.
+Answers the active question.
 
 ```bash
 curl -X POST -H "Content-Type: application/json" \
@@ -228,23 +228,23 @@ curl -X POST -H "Content-Type: application/json" \
 
 #### Get answers
 
-Participantes solo tras cerrar el match; admin/árbitro en cualquier momento. Trae `ai_score`/`ai_justification`, evaluados por IA (Moonshot) apenas se deja atrás cada pregunta.
+Participants only after the match closes; admin/referee any time. Includes `ai_score`/`ai_justification`, evaluated by AI (Moonshot) as soon as each question is left behind.
 
 ```bash
 curl -H "Authorization: Bearer PASTE_ACCESS_TOKEN_HERE" \
   http://localhost:3000/tournament/events/PASTE_EVENT_ID_HERE/matches/PASTE_MATCH_ID_HERE/answers
 ```
 
-#### List match questions — admin o árbitro
+#### List match questions — admin or referee
 
-Cuestionario completo del match, con rúbrica.
+The match's full question set, with rubric.
 
 ```bash
 curl -H "Authorization: Bearer PASTE_ACCESS_TOKEN_HERE" \
   http://localhost:3000/tournament/events/PASTE_EVENT_ID_HERE/matches/PASTE_MATCH_ID_HERE/questions
 ```
 
-#### Get match question by id — admin o árbitro
+#### Get match question by id — admin or referee
 
 ```bash
 curl -H "Authorization: Bearer PASTE_ACCESS_TOKEN_HERE" \
@@ -253,12 +253,12 @@ curl -H "Authorization: Bearer PASTE_ACCESS_TOKEN_HERE" \
 
 #### Update match question — admin, partial
 
-Corrección de contenido, solo mientras el match sigue `pending`.
+Content correction, only while the match is still `pending`.
 
 ```bash
 curl -X PATCH -H "Content-Type: application/json" \
   -H "Authorization: Bearer PASTE_ACCESS_TOKEN_HERE" \
-  -d '{"rubric":"Respuesta esperada: 1969, aceptar también \"año 69\"."}' \
+  -d '{"rubric":"Expected answer: 1969, also accept \"year 69\"."}' \
   http://localhost:3000/tournament/events/PASTE_EVENT_ID_HERE/matches/PASTE_MATCH_ID_HERE/questions/PASTE_QUESTION_ID_HERE
 ```
 
@@ -266,23 +266,23 @@ curl -X PATCH -H "Content-Type: application/json" \
 
 #### Send message
 
-Jugadores del match, árbitro del evento, o admin. `questionId` opcional, para reclamar sobre una pregunta puntual.
+Match players, event referee, or admin. `questionId` optional, for a dispute about one specific question.
 
 ```bash
 curl -X POST -H "Content-Type: application/json" \
   -H "Authorization: Bearer PASTE_ACCESS_TOKEN_HERE" \
-  -d '{"text":"No estoy de acuerdo con el puntaje de esta pregunta"}' \
+  -d '{"text":"I disagree with the score on this question"}' \
   http://localhost:3000/tournament/events/PASTE_EVENT_ID_HERE/matches/PASTE_MATCH_ID_HERE/chat
 ```
 
 ```bash
 curl -X POST -H "Content-Type: application/json" \
   -H "Authorization: Bearer PASTE_ACCESS_TOKEN_HERE" \
-  -d '{"text":"Mi respuesta mencionaba el punto clave, revisar","questionId":"PASTE_QUESTION_ID_HERE"}' \
+  -d '{"text":"My answer mentioned the key point, please review","questionId":"PASTE_QUESTION_ID_HERE"}' \
   http://localhost:3000/tournament/events/PASTE_EVENT_ID_HERE/matches/PASTE_MATCH_ID_HERE/chat
 ```
 
-#### List messages — mismos participantes
+#### List messages — same participants
 
 ```bash
 curl -H "Authorization: Bearer PASTE_ACCESS_TOKEN_HERE" \
@@ -291,16 +291,16 @@ curl -H "Authorization: Bearer PASTE_ACCESS_TOKEN_HERE" \
 
 ## Ranking
 
-#### Global leaderboard — autenticado
+#### Global leaderboard — authenticated
 
-Suma de puntos de todos los eventos.
+Sum of points across all events.
 
 ```bash
 curl -H "Authorization: Bearer PASTE_ACCESS_TOKEN_HERE" \
   http://localhost:3000/ranking
 ```
 
-#### Event leaderboard — autenticado
+#### Event leaderboard — authenticated
 
 ```bash
 curl -H "Authorization: Bearer PASTE_ACCESS_TOKEN_HERE" \
@@ -311,24 +311,24 @@ curl -H "Authorization: Bearer PASTE_ACCESS_TOKEN_HERE" \
 
 #### Override answer score — admin
 
-Solo en match `closed`/`walkover` — recalcula el resultado del match y el ranking.
+Only on a `closed`/`walkover` match — recalculates the match result and the ranking.
 
 ```bash
 curl -X PATCH -H "Content-Type: application/json" \
   -H "Authorization: Bearer PASTE_ACCESS_TOKEN_HERE" \
-  -d '{"score":15,"reason":"La respuesta mencionaba el punto clave que la IA no detectó, según lo discutido en el chat"}' \
+  -d '{"score":15,"reason":"The answer mentioned the key point the AI missed, per the dispute chat discussion"}' \
   http://localhost:3000/tournament/events/PASTE_EVENT_ID_HERE/matches/PASTE_MATCH_ID_HERE/answers/PASTE_ANSWER_ID_HERE/override
 ```
 
 #### Reopen match — admin
 
-Repite el match desde cero (ej. plagio detectado post-match): vuelve a `pending`, borra respuestas/preguntas/puntaje/ranking de ese match.
+Repeats the match from scratch (e.g. plagiarism detected post-match): goes back to `pending`, clears answers/questions/score/ranking for that match.
 
 ```bash
 curl -X POST -H "Content-Type: application/json" \
   -H "Authorization: Bearer PASTE_ACCESS_TOKEN_HERE" \
-  -d '{"reason":"Plagio detectado en la respuesta del jugador A, se reabre para sustituirlo"}' \
+  -d '{"reason":"Plagiarism detected in player A answer, reopening to substitute them"}' \
   http://localhost:3000/tournament/events/PASTE_EVENT_ID_HERE/matches/PASTE_MATCH_ID_HERE/reopen
 ```
 
-> Después de reabrir: usar `PATCH .../participants` (ya desbloqueado, vuelve a `pending`) para sustituir al jugador descalificado, y `PATCH .../schedule` para reagendar (regenera preguntas nuevas).
+> After reopening: use `PATCH .../participants` (unlocked again, back to `pending`) to substitute the disqualified player, and `PATCH .../schedule` to reschedule it (regenerates new questions).

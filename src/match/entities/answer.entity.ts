@@ -5,8 +5,8 @@ import {
   PrimaryGeneratedColumn,
 } from 'typeorm';
 
-// ai_score / ai_justification los llena el evaluador IA (Fase 7, todavía no
-// construido) — acá solo se persiste el texto y el timestamp de envío.
+// ai_score / ai_justification are filled in by the AI evaluator — this just
+// persists the answer text and the submission timestamp.
 @Entity('answers')
 export class Answer {
   @PrimaryGeneratedColumn('uuid')
@@ -36,7 +36,7 @@ export class Answer {
   @Column({ type: 'numeric', name: 'admin_override_score', nullable: true })
   adminOverrideScore!: number | null;
 
-  // Auditoría del override (Fase 10): quién corrigió, cuándo, por qué.
+  // Override audit trail (Fase 10): who corrected it, when, why.
   @Column({ type: 'text', name: 'override_reason', nullable: true })
   overrideReason!: string | null;
 

@@ -10,12 +10,12 @@ export enum MatchStatus {
   IN_PROGRESS = 'in_progress',
   CLOSED = 'closed',
   WALKOVER = 'walkover',
-  // Nadie lo inició antes de scheduledEndAt — sin puntajes, requiere reagendar.
+  // Nobody started it before scheduledEndAt — no scores, needs rescheduling.
   EXPIRED = 'expired',
 }
 
-// El flujo de responder preguntas / puntaje / walkover-por-ausencia-total se
-// agrega aparte (ver CLAUDE.md, Fase 6 del roadmap).
+// The answer-questions / scoring / walkover-by-total-absence flow is added
+// separately (see CLAUDE.md, roadmap Fase 6).
 @Entity('matches')
 export class Match {
   @PrimaryGeneratedColumn('uuid')
@@ -50,23 +50,23 @@ export class Match {
   @CreateDateColumn({ type: 'timestamptz', name: 'created_at' })
   createdAt!: Date;
 
-  // Programación manual del admin — null hasta que la fija.
+  // Admin's manual scheduling — null until they set it.
   @Column({ type: 'timestamptz', name: 'scheduled_start_at', nullable: true })
   scheduledStartAt!: Date | null;
 
   @Column({ type: 'timestamptz', name: 'scheduled_end_at', nullable: true })
   scheduledEndAt!: Date | null;
 
-  // Hora real en que admin/árbitro arrancó/cerró el match — puede diferir de
-  // lo programado (arranca tarde, termina antes de lo estimado).
+  // Actual time admin/referee started/closed the match — can differ from what
+  // was scheduled (starts late, ends earlier than estimated).
   @Column({ type: 'timestamptz', name: 'started_at', nullable: true })
   startedAt!: Date | null;
 
   @Column({ type: 'timestamptz', name: 'ended_at', nullable: true })
   endedAt!: Date | null;
 
-  // Puntero a la pregunta activa (posición en match_questions) + su deadline
-  // — timers de pregunta sin Redis, ver CLAUDE.md.
+  // Pointer to the active question (position in match_questions) + its deadline
+  // — question timers without Redis, see CLAUDE.md.
   @Column({ type: 'int', name: 'current_question_position', nullable: true })
   currentQuestionPosition!: number | null;
 

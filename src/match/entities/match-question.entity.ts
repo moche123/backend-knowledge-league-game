@@ -5,9 +5,9 @@ import {
   PrimaryGeneratedColumn,
 } from 'typeorm';
 
-// Única fuente de verdad de las preguntas de un match — sin banco compartido
-// por evento, cada match genera las suyas al agendarse (ver
-// MatchQuestionGenerationService, disparado desde MatchService.schedule()).
+// Single source of truth for a match's questions — no shared per-event bank,
+// each match generates its own when scheduled (see MatchQuestionGenerationService,
+// triggered from MatchService.schedule()).
 @Entity('match_questions')
 export class MatchQuestion {
   @PrimaryGeneratedColumn('uuid')
@@ -28,15 +28,15 @@ export class MatchQuestion {
   @Column({ type: 'numeric', name: 'max_score' })
   maxScore!: number;
 
-  // Segundos.
+  // Seconds.
   @Column({ type: 'int', name: 'time_limit' })
   timeLimit!: number;
 
   @CreateDateColumn({ type: 'timestamptz', name: 'created_at' })
   createdAt!: Date;
 
-  // Cuándo pasó a ser la pregunta activa del match — base del cálculo de
-  // velocidad (30% de la fórmula de scoring).
+  // When this became the match's active question — the basis for the speed
+  // calculation (30% of the scoring formula).
   @Column({ type: 'timestamptz', name: 'activated_at', nullable: true })
   activatedAt!: Date | null;
 }

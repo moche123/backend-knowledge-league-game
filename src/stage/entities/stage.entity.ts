@@ -1,7 +1,7 @@
 import { Column, Entity, PrimaryGeneratedColumn } from 'typeorm';
 import type { StageType } from '../bracket';
 
-// TypeORM necesita los valores del enum en runtime (no solo el type de TS).
+// TypeORM needs the enum values at runtime (not just the TS type).
 export const STAGE_TYPES: StageType[] = [
   'round_of_16',
   'quarterfinal',
@@ -24,7 +24,7 @@ export class Stage {
   @Column({ type: 'int' })
   position!: number;
 
-  // Semilla del sorteo de esta fase — null hasta que se sortean sus cruces.
+  // Draw seed for this stage — null until its pairings are drawn.
   @Column({ type: 'text', nullable: true })
   seed!: string | null;
 }

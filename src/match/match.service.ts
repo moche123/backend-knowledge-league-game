@@ -67,12 +67,12 @@ export class MatchService {
     return this.getMatchOrThrow(eventId, matchId);
   }
 
-  // Admin fija u actualiza la programación — permitido mientras el match no
-  // haya arrancado, o para reagendar uno que expiró sin jugarse. Genera (o
-  // regenera, si ya tenía) el cuestionario propio de este match por IA —
-  // sin banco compartido, cada match saca sus preguntas al agendarse, no al
-  // arrancar. Si la IA falla, no se guarda el reagendado tampoco (se valida
-  // y genera ANTES de tocar la hora).
+  // Admin sets or updates the schedule — allowed while the match hasn't
+  // started yet, or to reschedule one that expired unplayed. Generates (or
+  // regenerates, if it already had one) this match's own question set via AI —
+  // no shared bank, each match pulls its questions when scheduled, not when
+  // started. If the AI call fails, the reschedule isn't saved either (it's
+  // validated and generated BEFORE touching the time).
   async schedule(
     eventId: string,
     matchId: string,
@@ -107,10 +107,10 @@ export class MatchService {
     return this.matchRepository.save(match);
   }
 
-  // Admin cambia uno o los dos participantes — solo antes de que arranque
-  // (ej. algo surgió en el chat y hay que corregir el cruce). Corrección
-  // post-match (descalificación/sustitución/repetir un match cerrado) queda
-  // para cuando exista el flujo completo de puntaje (ver CLAUDE.md Fase 10).
+  // Admin changes one or both participants — only before the match starts
+  // (e.g. something came up in chat and the pairing needs correcting). Post-match
+  // correction (disqualification/substitution/repeating a closed match) is
+  // for once the full scoring flow exists (see CLAUDE.md Fase 10).
   async editParticipants(
     eventId: string,
     matchId: string,
@@ -171,14 +171,14 @@ export class MatchService {
     return this.matchRepository.save(match);
   }
 
-  // Fase 10 — admin corrige el puntaje IA de una respuesta puntual, a partir
-  // de lo discutido en el chat de reclamos. Solo sobre matches ya cerrados
-  // (closed/walkover) — nada que corregir en uno que sigue en curso.
-  // Recalcula el resultado del match entero (la corrección puede cambiar
-  // calidad/velocidad de AMBOS jugadores) y el ledger de ranking. No
-  // propaga el cambio a fases ya sorteadas a partir del ganador viejo, si
-  // el override cambia quién ganó — eso queda a mano del admin
-  // (editParticipants en el match siguiente, si sigue pending).
+  // Fase 10 — admin corrects one answer's AI score, based on what was
+  // discussed in the dispute chat. Only on already-closed matches
+  // (closed/walkover) — nothing to correct on one still in progress.
+  // Recalculates the entire match result (the correction can change
+  // quality/velocity for BOTH players) and the ranking ledger. Doesn't
+  // propagate the change to stages already drawn from the old winner, if
+  // the override changes who won — that's left to the admin by hand
+  // (editParticipants on the next match, if it's still pending).
   async overrideAnswerScore(
     eventId: string,
     matchId: string,
@@ -222,13 +222,13 @@ export class MatchService {
     return answer;
   }
 
-  // Fase 10 — repite un match cerrado desde cero (ej. plagio detectado
-  // post-match, o cualquier otro motivo de disputa grave). Limpia
-  // respuestas, preguntas generadas, puntaje y ganador; vuelve a `pending`.
-  // El admin puede después cambiar participantes (editParticipants, ya
-  // desbloqueado al volver a pending) y reagendarlo (schedule, que genera
-  // preguntas nuevas). No propaga a fases ya sorteadas a partir del
-  // resultado viejo — corrección manual del admin si hace falta.
+  // Fase 10 — repeats a closed match from scratch (e.g. plagiarism detected
+  // post-match, or any other serious dispute reason). Clears answers,
+  // generated questions, score and winner; goes back to `pending`. Admin
+  // can then change participants (editParticipants, unlocked again once
+  // pending) and reschedule it (schedule, which generates new questions).
+  // Doesn't propagate to stages already drawn from the old result — manual
+  // admin correction if needed.
   async reopen(
     eventId: string,
     matchId: string,
@@ -266,17 +266,17 @@ export class MatchService {
         matchId: match.id,
         questionId: null,
         authorId: requesterId,
-        text: `[Sistema] Match reabierto por admin. Motivo: ${dto.reason}`,
+        text: `[System] Match reopened by admin. Reason: ${dto.reason}`,
       }),
     );
 
     return saved;
   }
 
-  // Admin o árbitro — nunca antes de la hora pactada, sin límite de cuánto
-  // después (ver CLAUDE.md). Ya no genera preguntas acá (eso pasa al
-  // agendar) — solo activa el cuestionario ya generado y arranca el timer
-  // de la primera.
+  // Admin or referee — never before the agreed time, no limit on how much
+  // later (see CLAUDE.md). No longer generates questions here (that happens
+  // at scheduling) — just activates the already-generated question set and
+  // starts the first one's timer.
   async start(eventId: string, matchId: string): Promise<Match> {
     const match = await this.getMatchOrThrow(eventId, matchId);
     if (match.status !== MatchStatus.PENDING) {
@@ -314,8 +314,8 @@ export class MatchService {
     return this.matchRepository.save(match);
   }
 
-  // Admin o árbitro — puede cerrarlo antes de lo estimado si terminó rápido;
-  // el chat de reclamos sigue abierto después de esto, no lo bloquea.
+  // Admin or referee — can close it earlier than estimated if it finished
+  // fast; the dispute chat stays open after this, it doesn't block it.
   async end(eventId: string, matchId: string): Promise<Match> {
     const match = await this.getMatchOrThrow(eventId, matchId);
     if (match.status !== MatchStatus.IN_PROGRESS) {
@@ -327,7 +327,7 @@ export class MatchService {
     return this.closeMatch(match);
   }
 
-  // Jugador envía su respuesta a la pregunta activa del match.
+  // Player submits their answer to the match's active question.
   async submitAnswer(
     eventId: string,
     matchId: string,
@@ -379,7 +379,7 @@ export class MatchService {
     return saved;
   }
 
-  // Solo los dos jugadores del match — nunca la rúbrica/respuesta esperada.
+  // Only the match's two players — never the rubric/expected answer.
   async getCurrentQuestion(
     eventId: string,
     matchId: string,
@@ -433,8 +433,8 @@ export class MatchService {
     };
   }
 
-  // Tras cerrar el match, ambos jugadores ven las dos respuestas lado a
-  // lado (ver CLAUDE.md); admin/árbitro pueden verlas en cualquier momento.
+  // After the match closes, both players see both answers side by side
+  // (see CLAUDE.md); admin/referee can see them at any time.
   async getAnswers(
     eventId: string,
     matchId: string,
@@ -465,8 +465,8 @@ export class MatchService {
     });
   }
 
-  // Admin/árbitro ven el cuestionario completo (con rúbrica) de un match
-  // puntual — mantenimiento/corrección, no lo que ve el jugador.
+  // Admin/referee see one match's full question set (with rubric) —
+  // maintenance/correction, not what the player sees.
   async findQuestionsForMatch(
     eventId: string,
     matchId: string,
@@ -493,8 +493,8 @@ export class MatchService {
     return question;
   }
 
-  // Solo corrección de contenido, mientras el match no arrancó — no se
-  // agrega ni se saca una pregunta del lote (ver CLAUDE.md).
+  // Content correction only, while the match hasn't started — questions
+  // can't be added to or removed from the batch (see CLAUDE.md).
   async updateQuestion(
     eventId: string,
     matchId: string,
@@ -512,8 +512,8 @@ export class MatchService {
     return this.matchQuestionRepository.save(question);
   }
 
-  // Nadie lo arrancó antes de la hora de fin estimada — sin puntajes, admin
-  // tiene que reagendarlo a mano (ver CLAUDE.md).
+  // Nobody started it before the estimated end time — no scores, admin
+  // has to reschedule it by hand (see CLAUDE.md).
   @Cron(CronExpression.EVERY_MINUTE)
   async expireOverdueMatches(): Promise<void> {
     await this.matchRepository.update(
@@ -525,8 +525,8 @@ export class MatchService {
     );
   }
 
-  // Timer de pregunta sin Redis (MVP): si nadie más responde antes del
-  // deadline, igual avanza a la siguiente (o cierra si era la última).
+  // Question timer without Redis (MVP): if nobody else answers before the
+  // deadline, it still advances to the next one (or closes if it was the last).
   @Cron(CronExpression.EVERY_10_SECONDS)
   async advanceOverdueQuestions(): Promise<void> {
     const overdueMatches = await this.matchRepository.find({
@@ -584,10 +584,10 @@ export class MatchService {
     return this.matchRepository.save(match);
   }
 
-  // Walkover si exactamente uno de los dos no respondió NINGUNA pregunta del
-  // match (ver CLAUDE.md). Puntaje/ganador real se calculan acá (evaluador
-  // IA por pregunta ya corrió en advanceQuestion — esto solo agrega la
-  // fórmula final 70/30 sobre lo ya puntuado).
+  // Walkover if exactly one of the two answered NONE of the match's
+  // questions (see CLAUDE.md). Actual score/winner are computed here (the
+  // per-question AI evaluator already ran in advanceQuestion — this just
+  // applies the final 70/30 formula over what's already scored).
   private async closeMatch(match: Match): Promise<Match> {
     const [answersFromA, answersFromB] = await Promise.all([
       match.playerAId
@@ -626,9 +626,9 @@ export class MatchService {
         });
     }
 
-    // Si esta era la última partida pendiente de la fase, sortea la/las
-    // fases siguientes con ganadores reales (ver StageService). No debe
-    // tumbar el cierre del match si falla.
+    // If this was the stage's last pending match, draws the next stage(s)
+    // with real winners (see StageService). Must not block the match's
+    // closing if it fails.
     await this.stageService.checkAndAdvance(match.stageId).catch((error) => {
       this.logger.error(
         `checkAndAdvance failed for stage ${match.stageId}: ${(error as Error).message}`,

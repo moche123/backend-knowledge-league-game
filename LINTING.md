@@ -1,27 +1,27 @@
 # ESLint + Prettier + Husky
 
-Setup de calidad de código para `backend` (NestJS).
+Code quality setup for `backend` (NestJS).
 
-## Piezas
+## Pieces
 
-- **ESLint** (`eslint.config.mjs`) — flat config, `typescript-eslint` recommendedTypeChecked + `eslint-plugin-prettier` (corre Prettier como regla de ESLint, así un solo comando arregla ambos).
+- **ESLint** (`eslint.config.mjs`) — flat config, `typescript-eslint` recommendedTypeChecked + `eslint-plugin-prettier` (runs Prettier as an ESLint rule, so one command fixes both).
 - **Prettier** (`.prettierrc`) — `singleQuote: true`, `trailingComma: all`.
-- **Husky** (`.husky/pre-commit`) — hook de git que corre `lint-staged` antes de cada commit.
-- **lint-staged** (config en `package.json`) — corre `eslint --fix` + `prettier --write` solo sobre los `.ts` staged (no el repo entero).
+- **Husky** (`.husky/pre-commit`) — git hook that runs `lint-staged` before every commit.
+- **lint-staged** (config in `package.json`) — runs `eslint --fix` + `prettier --write` only on staged `.ts` files (not the whole repo).
 
-## Instalación (ya hecha, referencia si se clona limpio)
+## Installation (already done, reference if cloned fresh)
 
 ```bash
 npm install
-npm run prepare   # instala los git hooks de husky (se corre solo via "prepare" en npm install)
+npm run prepare   # installs husky's git hooks (runs automatically via "prepare" on npm install)
 ```
 
 ## Scripts
 
-| Comando | Qué hace |
+| Command | What it does |
 |---|---|
-| `npm run lint` | Corre ESLint con `--fix` sobre `src`, `apps`, `libs`, `test`. |
-| `npm run format` | Corre Prettier `--write` sobre `src/**/*.ts` y `test/**/*.ts`. |
+| `npm run lint` | Runs ESLint with `--fix` over `src`, `apps`, `libs`, `test`. |
+| `npm run format` | Runs Prettier `--write` over `src/**/*.ts` and `test/**/*.ts`. |
 
 ## Pre-commit hook
 
@@ -42,23 +42,23 @@ npx lint-staged
 }
 ```
 
-Al hacer `git commit`, solo los `.ts` en el stage pasan por `eslint --fix` y `prettier --write`. Si ESLint tira error (no warning) sobre alguno de esos archivos, el commit se aborta — corregí y volvé a `git add` + `git commit`.
+On `git commit`, only the staged `.ts` files go through `eslint --fix` and `prettier --write`. If ESLint throws an error (not a warning) on any of those files, the commit is aborted — fix it and re-run `git add` + `git commit`.
 
-## Reglas ESLint no default
+## Non-default ESLint rules
 
-- `@typescript-eslint/no-explicit-any`: `off` — el proyecto usa `any` en algunos puntos (DTOs, respuestas de librerías sin tipos), no vale la pena forzarlo.
-- `@typescript-eslint/no-floating-promises`: `warn` (no `error`) — no bloquea commit, pero conviene revisar (hay uno pendiente en `src/main.ts:16`, el `bootstrap()` sin `void`/`.catch`).
+- `@typescript-eslint/no-explicit-any`: `off` — the project uses `any` in a few spots (DTOs, responses from untyped libraries), not worth forcing it.
+- `@typescript-eslint/no-floating-promises`: `warn` (not `error`) — doesn't block the commit, but worth reviewing (there's one pending in `src/main.ts:16`, the `bootstrap()` call without `void`/`.catch`).
 - `@typescript-eslint/no-unsafe-argument`: `warn`.
-- `prettier/prettier`: `error` con `endOfLine: "auto"` (evita falsos positivos por line endings entre macOS/Windows).
+- `prettier/prettier`: `error` with `endOfLine: "auto"` (avoids false positives from line endings between macOS/Windows).
 
 ## Format on save (VS Code)
 
-Extensiones necesarias (ya instaladas):
+Required extensions (already installed):
 
 - `esbenp.prettier-vscode` (Prettier)
 - `dbaeumer.vscode-eslint` (ESLint)
 
-Config en `.vscode/settings.json` (versionado, aplica a cualquiera que abra `backend/` como carpeta raíz en VS Code):
+Config in `.vscode/settings.json` (checked in, applies to anyone who opens `backend/` as the root folder in VS Code):
 
 ```json
 {
@@ -71,11 +71,11 @@ Config en `.vscode/settings.json` (versionado, aplica a cualquiera que abra `bac
 }
 ```
 
-Al guardar un `.ts`: Prettier formatea primero, después ESLint corre `--fix` (comillas, orden de imports si hay regla, etc). Si VS Code no lo aplica: revisar que ambas extensiones estén habilitadas y que la carpeta abierta sea `backend/` (o un workspace que lo incluya) — settings de `.vscode/` no aplican si abrís la raíz del monorepo sin `backend` como folder root.
+On saving a `.ts` file: Prettier formats first, then ESLint runs `--fix` (quotes, import order if there's a rule, etc). If VS Code doesn't apply it: check that both extensions are enabled and that the open folder is `backend/` (or a workspace that includes it) — `.vscode/` settings don't apply if you open the monorepo root without `backend` as the folder root.
 
-## Bypass del hook
+## Bypassing the hook
 
-Solo si es intencional (ej. WIP commit local que después se squashea):
+Only if intentional (e.g. a local WIP commit that gets squashed later):
 
 ```bash
 git commit --no-verify

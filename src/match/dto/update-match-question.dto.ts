@@ -8,8 +8,8 @@ import {
   MinLength,
 } from 'class-validator';
 
-// Solo corrección de contenido — no se agrega ni se saca una pregunta del
-// lote (se generó junto, con puntajes que suman exacto el presupuesto).
+// Content correction only — questions can't be added to or removed from the
+// batch (generated together, with scores that sum to exactly the budget).
 export class UpdateMatchQuestionDto {
   @ApiPropertyOptional()
   @IsOptional()

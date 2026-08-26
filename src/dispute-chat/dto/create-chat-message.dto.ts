@@ -7,7 +7,7 @@ export class CreateChatMessageDto {
   @MinLength(1)
   text!: string;
 
-  // Opcional — si el reclamo es sobre una pregunta puntual del match.
+  // Optional — set when the dispute is about a specific question in the match.
   @ApiPropertyOptional({
     description:
       'Ties the message to one match_questions row, if the dispute is about a specific question',

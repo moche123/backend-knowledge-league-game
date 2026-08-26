@@ -20,11 +20,11 @@ import { UserRole } from '../auth/entities/user.entity';
 import type { AuthenticatedUser } from '../auth/strategies/jwt.strategy';
 import { RegistrationService } from './registration.service';
 
-// POST   /tournament/events/:eventId/registrations         — jugador se inscribe a sí mismo
-// GET    /tournament/events/:eventId/registrations         — autenticado, lista inscriptos
-// DELETE /tournament/events/:eventId/registrations/me      — jugador cancela su inscripción (solo si sigue abierta)
-// POST   /tournament/events/:eventId/registrations/:userId — admin inscribe a un jugador puntual
-// DELETE /tournament/events/:eventId/registrations/:userId — admin desinscribe a un jugador puntual
+// POST   /tournament/events/:eventId/registrations         — player registers themself
+// GET    /tournament/events/:eventId/registrations         — authenticated, lists registrants
+// DELETE /tournament/events/:eventId/registrations/me      — player cancels their registration (only while still open)
+// POST   /tournament/events/:eventId/registrations/:userId — admin registers a specific player
+// DELETE /tournament/events/:eventId/registrations/:userId — admin unregisters a specific player
 @ApiTags('registrations')
 @ApiBearerAuth('access-token')
 @ApiParam({ name: 'eventId', description: 'Event id' })

@@ -11,7 +11,7 @@ export enum UserRole {
   REFEREE = 'referee',
 }
 
-// El puntaje acumulado no vive acá — lo calcula/cachea ranking-service (ver CLAUDE.md).
+// The accumulated score doesn't live here — the ranking service computes/caches it (see CLAUDE.md).
 @Entity('users')
 export class User {
   @PrimaryGeneratedColumn('uuid')
@@ -32,8 +32,8 @@ export class User {
   @CreateDateColumn({ type: 'timestamptz', name: 'created_at' })
   createdAt!: Date;
 
-  // Hash bcrypt del refresh token vigente (rotación en cada uso) + su expiración.
-  // Nulos si el usuario nunca hizo login o cerró sesión.
+  // bcrypt hash of the current refresh token (rotated on every use) + its expiry.
+  // Both null if the user never logged in or has logged out.
   @Column({ type: 'text', name: 'refresh_token_hash', nullable: true })
   refreshTokenHash!: string | null;
 

@@ -22,9 +22,9 @@ const GeneratedQuestionsSchema = z.object({
 
 const DEFAULT_TIME_LIMIT_SECONDS = 30;
 
-// Moonshot AI (Kimi) — API compatible con el formato OpenAI. Elegido para el
-// MVP a pedido del usuario (tiene API key propia); CLAUDE.md documenta esta
-// decisión en la sección del agente evaluador/generador de IA.
+// Moonshot AI (Kimi) — API compatible with the OpenAI format. Chosen for the
+// MVP at the user's request (they have their own API key); CLAUDE.md documents
+// this decision in the AI evaluator/generator agent section.
 const MOONSHOT_BASE_URL = 'https://api.moonshot.ai/v1';
 const MOONSHOT_MODEL = 'kimi-k2.6';
 
@@ -59,13 +59,13 @@ export class MatchQuestionGenerationService {
     private readonly configService: ConfigService,
   ) {}
 
-  // Se dispara desde MatchService.schedule() — nunca desde un endpoint
-  // propio. Sin banco compartido: cada match genera sus propias
-  // `questionsPerMatch` preguntas, evitando repetir texto contra TODO lo ya
-  // generado en el evento (otros matches incluidos) — así un jugador que ya
-  // jugó no puede filtrarle a otro una pregunta que le va a tocar después.
-  // Si el match ya tenía preguntas (reagenda), las tira y genera un set
-  // nuevo — regenera siempre, nunca reusa.
+  // Triggered from MatchService.schedule() — never from its own endpoint.
+  // No shared bank: each match generates its own `questionsPerMatch`
+  // questions, avoiding repeating text against EVERYTHING already generated
+  // in the event (other matches included) — so a player who already played
+  // can't leak a question to someone who hasn't played it yet.
+  // If the match already had questions (reschedule), they're discarded and
+  // a fresh set is generated — always regenerates, never reuses.
   async generateForMatch(
     eventId: string,
     matchId: string,
@@ -119,7 +119,7 @@ export class MatchQuestionGenerationService {
     const client = new OpenAI({ apiKey, baseURL: MOONSHOT_BASE_URL });
 
     const avoidList = existingTexts.length
-      ? `Preguntas que YA existen para este evento, en otros matches (no las repitas ni generes variantes obvias — un jugador que ya las respondió podría filtrárselas a otro):\n${existingTexts
+      ? `Questions that ALREADY exist for this event, in other matches (don't repeat them or generate obvious variants — a player who already answered them could leak them to another):\n${existingTexts
           .map((text) => `- ${text}`)
           .join('\n')}\n\n`
       : '';
@@ -132,21 +132,21 @@ export class MatchQuestionGenerationService {
           {
             role: 'system',
             content:
-              'Sos un generador de preguntas de trivia para un torneo de conocimiento tipo ' +
-              'mata-mata competitivo. Nivel de dificultad: DIFÍCIL — es una competencia, las ' +
-              'preguntas deben exigir conocimiento real y específico, no trivia superficial. ' +
-              'Cada pregunta se responde en texto libre (no opción múltiple) y la evalúa después ' +
-              'una IA contra la rúbrica que generes, así que la rúbrica tiene que describir ' +
-              'claramente qué debe contener una respuesta correcta (puntos clave esperados, no ' +
-              'solo "la respuesta es X"). Escribí todo en español.',
+              'You are a trivia question generator for a competitive knockout knowledge ' +
+              'tournament. Difficulty level: HARD — this is a competition, questions must ' +
+              'demand real, specific knowledge, not surface-level trivia. Each question is ' +
+              'answered in free text (not multiple choice) and later graded by an AI against ' +
+              'the rubric you generate, so the rubric must clearly describe what a correct ' +
+              'answer must contain (expected key points, not just "the answer is X"). ' +
+              'Write everything in English.',
           },
           {
             role: 'user',
             content:
-              `${avoidList}Generá exactamente ${count} preguntas nuevas, difíciles, sobre el ` +
-              `tema "${theme}", de dificultad variada entre ellas (todas difíciles, pero no ` +
-              'idénticas en exigencia), con un puntaje sugerido (número positivo) proporcional ' +
-              'a esa dificultad relativa.',
+              `${avoidList}Generate exactly ${count} new, hard questions about the topic ` +
+              `"${theme}", with varying difficulty among them (all hard, but not identically ` +
+              'demanding), with a suggested score (positive number) proportional ' +
+              'to that relative difficulty.',
           },
         ],
         response_format: {
@@ -187,9 +187,9 @@ export class MatchQuestionGenerationService {
     return parsed.questions;
   }
 
-  // Reescala los puntajes sugeridos por la IA para que sumen EXACTO
-  // maxScorePerMatch del evento — es el denominador de la normalización 0-100
-  // de la fórmula de scoring (ver CLAUDE.md).
+  // Rescales the AI-suggested scores so they sum to EXACTLY the event's
+  // maxScorePerMatch — it's the denominator for the scoring formula's 0-100
+  // normalization (see CLAUDE.md).
   private normalizeScores(raw: number[], targetTotal: number): number[] {
     const rawTotal = raw.reduce((sum, value) => sum + value, 0);
     const scale = targetTotal / rawTotal;

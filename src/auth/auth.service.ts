@@ -38,7 +38,7 @@ export class AuthService {
 
     const passwordHash = await bcrypt.hash(createAuthDto.password, SALT_ROUNDS);
 
-    // Registro público: siempre rol "player" (decisión cerrada en CLAUDE.md).
+    // Public registration: always role "player" (decision closed in CLAUDE.md).
     const user = this.usersRepository.create({
       name: createAuthDto.name,
       email: createAuthDto.email,
@@ -69,9 +69,9 @@ export class AuthService {
     return this.buildAuthResponse(user);
   }
 
-  // Rota el refresh token en cada uso: uno viejo consumido ya no sirve, así
-  // que un token robado y reutilizado por el atacante después del dueño real
-  // (o viceversa) queda detectado como credencial inválida en el próximo intento.
+  // Rotates the refresh token on every use: a consumed old one no longer works,
+  // so a stolen token reused by an attacker after the real owner (or vice versa)
+  // gets caught as an invalid credential on the next attempt.
   async refreshTokens(refreshToken: string): Promise<AuthResponseDto> {
     let payload: RefreshPayload;
     try {
@@ -152,8 +152,8 @@ export class AuthService {
   }
 }
 
-// Traduce strings tipo "30d" / "12h" / "3600" (segundos) al equivalente en ms,
-// para poder guardar refresh_token_expires_at sin depender de un parser externo.
+// Converts strings like "30d" / "12h" / "3600" (seconds) to their ms equivalent,
+// so refresh_token_expires_at can be stored without an external parser dependency.
 function parseDurationMs(duration: string): number {
   const match = /^(\d+)(ms|s|m|h|d)?$/.exec(duration.trim());
   if (!match) {

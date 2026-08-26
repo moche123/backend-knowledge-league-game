@@ -12,10 +12,10 @@ import {
   MinLength,
 } from 'class-validator';
 
-// id, status y created_at los asigna el service (default 'registration_open'),
-// no llegan del cliente. maxPlayers restringido al set de CLAUDE.md (4/8/16/32
-// — MVP no soporta byes); el CHECK chk_players_power_of_2 en Postgres queda
-// como backstop, no como única validación (acá da 400 en vez de 500).
+// id, status and created_at are assigned by the service (default 'registration_open'),
+// they don't come from the client. maxPlayers restricted to the CLAUDE.md set (4/8/16/32
+// — MVP doesn't support byes); the chk_players_power_of_2 CHECK in Postgres stays
+// as a backstop, not the only validation (this gives a 400 instead of a 500).
 export class CreateTournamentDto {
   @ApiProperty({ example: 'Copa Saber', description: 'Unique, case-sensitive' })
   @IsString()
@@ -56,8 +56,8 @@ export class CreateTournamentDto {
   @Max(100)
   maxScorePerMatch?: number;
 
-  // Opcional: el admin puede asignarlo después (calendario del árbitro se
-  // valida vía excl_referee_calendar en Postgres cuando sí viene seteado).
+  // Optional: admin can assign it later (referee calendar is validated
+  // via excl_referee_calendar in Postgres whenever it's actually set).
   @ApiPropertyOptional({
     description:
       'Can be assigned later. No two overlapping events may share a referee.',

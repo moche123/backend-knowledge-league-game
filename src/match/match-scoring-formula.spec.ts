@@ -59,11 +59,11 @@ describe('computeVelocity', () => {
   });
 });
 
-describe('computeResult — 70% calidad + 30% velocidad', () => {
+describe('computeResult — 70% quality + 30% velocity', () => {
   it('a perfect-quality, slowest player still beats an empty-quality, fastest player', () => {
-    // Caso del roadmap: la velocidad nunca revierte una diferencia GRANDE de calidad.
-    const resultA = computeResult(100, 0); // calidad perfecta, el más lento
-    const resultB = computeResult(0, 100); // sin calidad, el más rápido
+    // Roadmap case: velocity never reverses a LARGE quality gap.
+    const resultA = computeResult(100, 0); // perfect quality, the slowest
+    const resultB = computeResult(0, 100); // no quality, the fastest
     expect(resultA).toBeGreaterThan(resultB);
     expect(resultA).toBe(70);
     expect(resultB).toBe(30);
@@ -71,17 +71,17 @@ describe('computeResult — 70% calidad + 30% velocidad', () => {
 
   it('a quality gap bigger than 30 points weighted (>~42.86 raw) is mathematically unflippable by velocity', () => {
     const qualityA = 80;
-    const qualityB = 30; // brecha de 50 puntos crudos, 35 ponderados — > 30
-    const resultA = computeResult(qualityA, 0); // A con la peor velocidad posible
-    const resultB = computeResult(qualityB, 100); // B con la mejor velocidad posible
+    const qualityB = 30; // 50-point raw gap, 35 weighted — > 30
+    const resultA = computeResult(qualityA, 0); // A with the worst possible velocity
+    const resultB = computeResult(qualityB, 100); // B with the best possible velocity
     expect(resultA).toBeGreaterThan(resultB);
   });
 
   it('a small quality gap CAN be decided by velocity (that is the point of the 30%)', () => {
     const qualityA = 51;
-    const qualityB = 50; // brecha mínima de calidad
-    const resultA = computeResult(qualityA, 0); // A lentísimo
-    const resultB = computeResult(qualityB, 100); // B rapidísimo
+    const qualityB = 50; // minimal quality gap
+    const resultA = computeResult(qualityA, 0); // A extremely slow
+    const resultB = computeResult(qualityB, 100); // B extremely fast
     expect(resultB).toBeGreaterThan(resultA);
   });
 

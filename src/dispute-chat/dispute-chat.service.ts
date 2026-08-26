@@ -15,10 +15,9 @@ import { Tournament } from '../tournament/entities/tournament.entity';
 import { UserRole } from '../auth/entities/user.entity';
 import type { AuthenticatedUser } from '../auth/strategies/jwt.strategy';
 
-// Chat de reclamos dentro del match — jugadores del match, árbitro asignado
-// al evento, y admin como participantes (ver CLAUDE.md). El admin puede
-// resolver disputas a partir de lo discutido acá; overridear el puntaje de
-// la IA queda para Fase 10 (fuera de este alcance).
+// In-match dispute chat — the match's players, the event's assigned referee,
+// and admin as participants (see CLAUDE.md). Admin can resolve disputes based
+// on what's discussed here; overriding the AI score is Fase 10 (out of scope here).
 @Injectable()
 export class DisputeChatService {
   constructor(

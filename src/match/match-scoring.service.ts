@@ -46,8 +46,7 @@ const EVALUATION_JSON_SCHEMA = {
   additionalProperties: false,
 } as const;
 
-// Mismo proveedor que la generación de preguntas (Moonshot/Kimi, decisión
-// del usuario para el MVP).
+// Same provider as question generation (Moonshot/Kimi, user's decision for the MVP).
 const MOONSHOT_BASE_URL = 'https://api.moonshot.ai/v1';
 const MOONSHOT_MODEL = 'kimi-k2.6';
 
@@ -63,11 +62,10 @@ export class MatchScoringService {
     private readonly configService: ConfigService,
   ) {}
 
-  // Evalúa las respuestas de UNA pregunta ya cerrada (uno o los dos
-  // jugadores) — al vuelo, apenas se deja esa pregunta atrás (ambos
-  // respondieron, o venció el deadline). Si nadie respondió, no hay nada
-  // que evaluar. Ambas respuestas se evalúan en la MISMA llamada (mismo
-  // criterio, ver CLAUDE.md).
+  // Evaluates the answers of ONE closed question (one or both players) —
+  // on the fly, as soon as that question is left behind (both answered,
+  // or the deadline passed). If nobody answered, there's nothing to evaluate.
+  // Both answers are evaluated in the SAME call (same criteria, see CLAUDE.md).
   async evaluateQuestion(matchQuestion: MatchQuestion): Promise<void> {
     const answers = await this.answerRepository.find({
       where: { matchId: matchQuestion.matchId, questionId: matchQuestion.id },
@@ -78,8 +76,8 @@ export class MatchScoringService {
     try {
       evaluations = await this.callAi(matchQuestion, answers);
     } catch (error) {
-      // No tumbar el avance del match por un fallo de IA — queda sin
-      // puntaje (null), el admin puede revisar/reintentar a mano después.
+      // Don't block match progress on an AI failure — leave it unscored
+      // (null), admin can review/retry by hand later.
       this.logger.error(
         `AI evaluation failed for question ${matchQuestion.id}: ${(error as Error).message}`,
       );
@@ -99,8 +97,8 @@ export class MatchScoringService {
     await this.answerRepository.save(answers);
   }
 
-  // Se llama al cerrar el match (CLOSED o WALKOVER ya decidido) — calcula
-  // resultado_final de cada jugador y define ganador. No cambia el status.
+  // Called when the match closes (CLOSED or WALKOVER already decided) —
+  // computes each player's final result and decides the winner. Doesn't change status.
   async computeMatchResult(match: Match): Promise<void> {
     if (!match.playerAId && !match.playerBId) return;
 
@@ -175,9 +173,9 @@ export class MatchScoringService {
       this.sumScores(answers, presentPlayerId),
       denominator,
     );
-    // Sin rival presente, no hay "velocidad vs rival" — el resultado del
-    // jugador presente es su calidad sola (ver CLAUDE.md). El ausente recibe
-    // el castigo fijo de -50 sobre su resultado.
+    // No opponent present, so there's no "velocity vs opponent" — the present
+    // player's result is just their quality (see CLAUDE.md). The absent
+    // player gets the flat -50 penalty on their result.
     const presentResult = round2(presentQuality);
     const absentResult = round2(0 - WALKOVER_PENALTY);
 
@@ -191,8 +189,8 @@ export class MatchScoringService {
     match.winnerId = presentPlayerId;
   }
 
-  // El override de admin (Fase 10) pisa el puntaje de la IA cuando existe —
-  // es la corrección final tras una disputa.
+  // Admin's override (Fase 10) overrides the AI score when it exists —
+  // it's the final correction after a dispute.
   private sumScores(answers: Answer[], playerId: string | null): number {
     if (!playerId) return 0;
     return answers
@@ -214,7 +212,7 @@ export class MatchScoringService {
         (a) => a.questionId === question.id && a.playerId === playerId,
       );
       if (!answer || !question.activatedAt) {
-        return sum + question.timeLimit; // no respondió — "usó" todo el tiempo
+        return sum + question.timeLimit; // didn't answer — "used" the whole time
       }
       const elapsed =
         (answer.submittedAt.getTime() - question.activatedAt.getTime()) / 1000;
@@ -232,7 +230,7 @@ export class MatchScoringService {
     const answersBlock = answers
       .map(
         (answer, index) =>
-          `Respuesta ${index} (jugador ${index}): """${answer.answerText}"""`,
+          `Answer ${index} (player ${index}): """${answer.answerText}"""`,
       )
       .join('\n\n');
 
@@ -242,20 +240,20 @@ export class MatchScoringService {
         {
           role: 'system',
           content:
-            'Sos el evaluador de un torneo de conocimiento tipo mata-mata. Calificás ' +
-            'respuestas de texto libre contra una rúbrica, con criterio estricto y consistente ' +
-            'entre jugadores — las dos respuestas de esta misma pregunta se evalúan juntas, en ' +
-            'esta misma llamada, para que el criterio no varíe entre una y otra. El puntaje va ' +
-            'de 0 al puntaje máximo de la pregunta. Justificá siempre en español, citando qué ' +
-            'puntos de la rúbrica cumplió o no cumplió cada respuesta.',
+            'You are the evaluator for a knockout knowledge tournament. You grade ' +
+            'free-text answers against a rubric, with strict, consistent criteria across ' +
+            'players — both answers to the same question are evaluated together, in this ' +
+            "same call, so the criteria doesn't vary between them. The score ranges from 0 " +
+            "to the question's maximum score. Always justify in English, citing which rubric " +
+            "points each answer did or didn't meet.",
         },
         {
           role: 'user',
           content:
-            `Pregunta: ${matchQuestion.text}\n` +
-            `Rúbrica / respuesta esperada: ${matchQuestion.rubric}\n` +
-            `Puntaje máximo: ${matchQuestion.maxScore}\n\n${answersBlock}\n\n` +
-            `Evaluá cada respuesta (answerIndex 0${answers.length > 1 ? ' y 1' : ''}) con su puntaje y justificación.`,
+            `Question: ${matchQuestion.text}\n` +
+            `Rubric / expected answer: ${matchQuestion.rubric}\n` +
+            `Max score: ${matchQuestion.maxScore}\n\n${answersBlock}\n\n` +
+            `Evaluate each answer (answerIndex 0${answers.length > 1 ? ' and 1' : ''}) with its score and justification.`,
         },
       ],
       response_format: {

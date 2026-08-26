@@ -3,9 +3,9 @@ import { randomBytes } from 'crypto';
 export type StageType =
   'round_of_16' | 'quarterfinal' | 'semifinal' | 'final' | 'third_place';
 
-// MVP: cantidad_jugadores_max restringida a potencias de 2, sin byes
-// (CLAUDE.md). round_of_32 no existe todavía en el enum stage_type de
-// Postgres — 32 queda sin soportar hasta que se agregue.
+// MVP: player count restricted to powers of 2, no byes (CLAUDE.md).
+// round_of_32 doesn't exist yet in Postgres' stage_type enum — 32 stays
+// unsupported until it's added.
 export const STAGE_SEQUENCE_BY_SIZE: Record<number, StageType[]> = {
   4: ['semifinal', 'final', 'third_place'],
   8: ['quarterfinal', 'semifinal', 'final', 'third_place'],
@@ -28,9 +28,8 @@ export function generateSeed(): string {
   return randomBytes(16).toString('hex');
 }
 
-// Sortea pares a partir de una semilla registrada: mismo seed + mismos
-// participantes siempre produce el mismo resultado (auditable/reproducible),
-// sin depender de Math.random.
+// Draws pairs from a recorded seed: same seed + same participants always
+// produces the same result (auditable/reproducible), without relying on Math.random.
 export function drawPairs(
   participantIds: string[],
   seed: string,
@@ -62,7 +61,7 @@ function seededShuffle<T>(items: T[], seed: string): T[] {
   return result;
 }
 
-// FNV-1a: string -> entero 32-bit, usado como semilla numérica del PRNG.
+// FNV-1a: string -> 32-bit integer, used as the PRNG's numeric seed.
 function hashSeed(seed: string): number {
   let hash = 0x811c9dc5;
   for (let i = 0; i < seed.length; i++) {
@@ -72,8 +71,8 @@ function hashSeed(seed: string): number {
   return hash >>> 0;
 }
 
-// mulberry32: PRNG determinístico de 32 bits, suficiente para un sorteo
-// auditable (no necesita ser criptográficamente seguro).
+// mulberry32: deterministic 32-bit PRNG, good enough for an auditable draw
+// (doesn't need to be cryptographically secure).
 function mulberry32(seed: number): () => number {
   let a = seed;
   return function () {

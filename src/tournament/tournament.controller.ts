@@ -24,8 +24,8 @@ import { Tournament } from './entities/tournament.entity';
 import { TournamentService } from './tournament.service';
 
 // POST /events — admin
-// GET /events — autenticado (Fase 4, vista jugador, reutiliza esta misma ruta sin restricción de rol admin)
-// GET /events/:id — autenticado
+// GET /events — authenticated (Fase 4, player view, reuses this same route with no admin-role restriction)
+// GET /events/:id — authenticated
 // PATCH /events/:id — admin
 // DELETE /events/:id — admin
 

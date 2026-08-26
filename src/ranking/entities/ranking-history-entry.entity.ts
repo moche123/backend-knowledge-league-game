@@ -5,9 +5,9 @@ import {
   PrimaryGeneratedColumn,
 } from 'typeorm';
 
-// Ledger histórico — el ranking global vivo se reconstruye sumando esto por
-// usuario (ver CLAUDE.md). En el MVP monolito, sin Redis: se calcula al
-// vuelo con una query agregada en vez de un sorted set.
+// Historical ledger — the live global ranking is rebuilt by summing this per
+// user (see CLAUDE.md). In the MVP monolith, no Redis: computed on the fly
+// with an aggregate query instead of a sorted set.
 @Entity('ranking_history')
 export class RankingHistoryEntry {
   @PrimaryGeneratedColumn('uuid')
@@ -19,8 +19,8 @@ export class RankingHistoryEntry {
   @Column({ type: 'uuid', name: 'event_id' })
   eventId!: string;
 
-  // Qué match generó esta entrada — permite corregirla si el admin
-  // overridea un puntaje después (Fase 10).
+  // Which match generated this entry — allows correcting it if admin
+  // overrides a score later (Fase 10).
   @Column({ type: 'uuid', name: 'match_id' })
   matchId!: string;
 

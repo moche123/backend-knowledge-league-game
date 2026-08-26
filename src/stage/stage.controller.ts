@@ -9,9 +9,9 @@ import { Roles } from '../auth/decorators/roles.decorator';
 import { UserRole } from '../auth/entities/user.entity';
 import { StageService } from './stage.service';
 
-// POST /tournament/events/:eventId/stages/draw — admin, cierra inscripción
-//   y sortea la primera fase (crea el árbol completo de fases del evento).
-// GET  /tournament/events/:eventId/stages       — autenticado, ver el bracket.
+// POST /tournament/events/:eventId/stages/draw — admin, closes registration
+//   and draws the first stage (creates the event's full stage tree).
+// GET  /tournament/events/:eventId/stages       — authenticated, view the bracket.
 @ApiTags('stages')
 @ApiBearerAuth('access-token')
 @ApiParam({ name: 'eventId', description: 'Event id' })

@@ -17,19 +17,19 @@ import { SubmitAnswerDto } from './dto/submit-answer.dto';
 import { UpdateMatchQuestionDto } from './dto/update-match-question.dto';
 import { MatchService } from './match.service';
 
-// GET   /tournament/events/:eventId/matches/:matchId               — autenticado
-// PATCH /tournament/events/:eventId/matches/:matchId/schedule      — admin, genera/regenera las preguntas del match
-// PATCH /tournament/events/:eventId/matches/:matchId/participants  — admin, solo pre-match
-// POST  /tournament/events/:eventId/matches/:matchId/start         — admin o árbitro
-// POST  /tournament/events/:eventId/matches/:matchId/end           — admin o árbitro
-// GET   /tournament/events/:eventId/matches/:matchId/current-question — jugador (solo los 2 del match)
-// POST  /tournament/events/:eventId/matches/:matchId/answers          — jugador (solo los 2 del match)
-// GET   /tournament/events/:eventId/matches/:matchId/answers          — participantes (solo tras cerrar) o admin/árbitro
-// GET   /tournament/events/:eventId/matches/:matchId/questions        — admin/árbitro, cuestionario completo (con rúbrica)
-// GET   /tournament/events/:eventId/matches/:matchId/questions/:id    — admin/árbitro
-// PATCH /tournament/events/:eventId/matches/:matchId/questions/:id    — admin, corrección de contenido, solo pre-match
-// PATCH /tournament/events/:eventId/matches/:matchId/answers/:answerId/override — admin, Fase 10, solo post-match
-// POST  /tournament/events/:eventId/matches/:matchId/reopen                    — admin, Fase 10, repite el match desde cero
+// GET   /tournament/events/:eventId/matches/:matchId               — authenticated
+// PATCH /tournament/events/:eventId/matches/:matchId/schedule      — admin, generates/regenerates the match's questions
+// PATCH /tournament/events/:eventId/matches/:matchId/participants  — admin, pre-match only
+// POST  /tournament/events/:eventId/matches/:matchId/start         — admin or referee
+// POST  /tournament/events/:eventId/matches/:matchId/end           — admin or referee
+// GET   /tournament/events/:eventId/matches/:matchId/current-question — player (only the match's 2)
+// POST  /tournament/events/:eventId/matches/:matchId/answers          — player (only the match's 2)
+// GET   /tournament/events/:eventId/matches/:matchId/answers          — participants (only after closing) or admin/referee
+// GET   /tournament/events/:eventId/matches/:matchId/questions        — admin/referee, full question set (with rubric)
+// GET   /tournament/events/:eventId/matches/:matchId/questions/:id    — admin/referee
+// PATCH /tournament/events/:eventId/matches/:matchId/questions/:id    — admin, content correction, pre-match only
+// PATCH /tournament/events/:eventId/matches/:matchId/answers/:answerId/override — admin, Fase 10, post-match only
+// POST  /tournament/events/:eventId/matches/:matchId/reopen                    — admin, Fase 10, repeats the match from scratch
 @ApiTags('matches')
 @ApiBearerAuth('access-token')
 @ApiParam({ name: 'eventId', description: 'Event id' })

@@ -10,7 +10,7 @@ import { CreateTournamentDto } from './dto/create-tournament.dto';
 import { UpdateTournamentDto } from './dto/update-tournament.dto';
 import { EventStatus, Tournament } from './entities/tournament.entity';
 
-// Postgres error codes que nos importan acá — ver CHECK/EXCLUDE/UNIQUE en schema.sql.
+// Postgres error codes we care about here — see CHECK/EXCLUDE/UNIQUE in schema.sql.
 const PG_CHECK_VIOLATION = '23514';
 const PG_EXCLUSION_VIOLATION = '23P01';
 const PG_UNIQUE_VIOLATION = '23505';
@@ -70,8 +70,8 @@ export class TournamentService {
     }
   }
 
-  // Traduce violaciones de constraint de Postgres (power-of-2, fechas, y el
-  // EXCLUDE de calendario del árbitro) a errores HTTP legibles en vez de un 500 crudo.
+  // Translates Postgres constraint violations (power-of-2, dates, and the
+  // referee calendar EXCLUDE) into readable HTTP errors instead of a raw 500.
   private async saveOrThrow(tournament: Tournament): Promise<Tournament> {
     try {
       return await this.tournamentRepository.save(tournament);

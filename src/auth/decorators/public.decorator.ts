@@ -2,6 +2,6 @@ import { SetMetadata } from '@nestjs/common';
 
 export const IS_PUBLIC_KEY = 'isPublic';
 
-// Marca un handler/controller como accesible sin JWT. El JwtAuthGuard global
-// (ver guards/jwt-auth.guard.ts) lee esta metadata con Reflector y deja pasar.
+// Marks a handler/controller as accessible without a JWT. The global JwtAuthGuard
+// (see guards/jwt-auth.guard.ts) reads this metadata via Reflector and lets it through.
 export const Public = () => SetMetadata(IS_PUBLIC_KEY, true);

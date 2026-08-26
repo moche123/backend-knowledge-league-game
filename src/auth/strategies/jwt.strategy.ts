@@ -26,7 +26,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     });
   }
 
-  // Lo que devuelve acá termina en request.user (ver CurrentUser decorator).
+  // Whatever's returned here ends up as request.user (see CurrentUser decorator).
   validate(payload: JwtPayload): AuthenticatedUser {
     return { id: payload.sub, email: payload.email, role: payload.role };
   }

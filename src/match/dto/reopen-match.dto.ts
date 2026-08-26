@@ -1,8 +1,8 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { IsString, MinLength } from 'class-validator';
 
-// Fase 10 — repetir un match cerrado desde cero (ej. plagio detectado
-// post-match). El motivo queda logueado en el chat del match.
+// Fase 10 — repeats a closed match from scratch (e.g. plagiarism detected
+// post-match). The reason gets logged in the match's chat.
 export class ReopenMatchDto {
   @ApiProperty({
     example:

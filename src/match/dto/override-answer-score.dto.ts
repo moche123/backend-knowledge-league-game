@@ -1,8 +1,8 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { IsNumber, IsString, Min, MinLength } from 'class-validator';
 
-// Fase 10 — admin corrige el puntaje de la IA a partir de lo discutido en
-// el chat de reclamos. reason queda logueado (auditoría).
+// Fase 10 — admin corrects the AI score based on what was discussed in the
+// dispute chat. reason gets logged (audit trail).
 export class OverrideAnswerScoreDto {
   @ApiProperty({ example: 15, minimum: 0 })
   @IsNumber()

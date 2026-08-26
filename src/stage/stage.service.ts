@@ -23,9 +23,9 @@ export interface StageWithMatches extends Stage {
   matches: Match[];
 }
 
-// Qué fase sigue después de cerrar esta, y de dónde saca sus participantes.
-// third_place es el caso especial: sale de los PERDEDORES de semifinal, no
-// de los ganadores — por eso semifinal dispara dos fases a la vez.
+// Which stage comes next after this one closes, and where its participants come from.
+// third_place is the special case: it comes from semifinal's LOSERS, not its
+// winners — that's why semifinal triggers two stages at once.
 const NEXT_STAGE_FROM_WINNERS: Partial<Record<StageType, StageType>> = {
   round_of_16: 'quarterfinal',
   quarterfinal: 'semifinal',
@@ -45,9 +45,8 @@ export class StageService {
     @InjectDataSource() private readonly dataSource: DataSource,
   ) {}
 
-  // Cierra inscripción y sortea la primera fase: crea el árbol completo de
-  // fases (stages) del evento y los cruces (matches) de la primera, con
-  // semilla registrada y auditable.
+  // Closes registration and draws the first stage: creates the event's full
+  // stage tree and the first stage's matches, with a recorded, auditable seed.
   async drawFirstStage(eventId: string): Promise<StageWithMatches[]> {
     const event = await this.tournamentRepository.findOne({
       where: { id: eventId },
@@ -114,10 +113,10 @@ export class StageService {
     });
   }
 
-  // Llamado por MatchService cada vez que un match cierra (closed/walkover).
-  // Si esa fue la última partida pendiente de la fase, sortea la/las fases
-  // siguientes con los ganadores (y perdedores, para third_place) reales.
-  // Idempotente: si la fase siguiente ya tiene semilla, no vuelve a sortear.
+  // Called by MatchService whenever a match closes (closed/walkover). If that
+  // was the stage's last pending match, draws the next stage(s) with the real
+  // winners (and losers, for third_place). Idempotent: if the next stage
+  // already has a seed, it won't draw again.
   async checkAndAdvance(stageId: string): Promise<void> {
     const stage = await this.stageRepository.findOne({
       where: { id: stageId },
@@ -205,7 +204,7 @@ export class StageService {
     stage: Stage,
     participantIds: string[],
   ): Promise<void> {
-    if (stage.seed) return; // ya sorteada — idempotencia
+    if (stage.seed) return; // already drawn — idempotency
 
     const seed = generateSeed();
     const pairs = drawPairs(participantIds, seed);

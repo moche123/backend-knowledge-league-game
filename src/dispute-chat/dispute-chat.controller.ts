@@ -10,8 +10,8 @@ import type { AuthenticatedUser } from '../auth/strategies/jwt.strategy';
 import { CreateChatMessageDto } from './dto/create-chat-message.dto';
 import { DisputeChatService } from './dispute-chat.service';
 
-// POST /tournament/events/:eventId/matches/:matchId/chat — jugadores del match, árbitro del evento, o admin
-// GET  /tournament/events/:eventId/matches/:matchId/chat — mismos participantes
+// POST /tournament/events/:eventId/matches/:matchId/chat — the match's players, the event's referee, or admin
+// GET  /tournament/events/:eventId/matches/:matchId/chat — same participants
 @ApiTags('dispute-chat')
 @ApiBearerAuth('access-token')
 @ApiParam({ name: 'eventId', description: 'Event id' })

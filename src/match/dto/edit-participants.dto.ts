@@ -1,7 +1,7 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { IsOptional, IsUUID } from 'class-validator';
 
-// Al menos uno de los dos debe venir — se valida en el service.
+// At least one of the two must be provided — validated in the service.
 export class EditParticipantsDto {
   @ApiPropertyOptional({
     description:

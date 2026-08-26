@@ -30,8 +30,8 @@ import { RankingModule } from './ranking/ranking.module';
         password: configService.getOrThrow<string>('DB_PASSWORD'),
         database: configService.getOrThrow<string>('DB_NAME'),
         entities: [__dirname + '/**/*.entity{.ts,.js}'],
-        // MVP monolito: la tabla ya existe vía schema.sql. Nada de synchronize
-        // acá — evita que TypeORM pise el schema a mano en un entorno compartido.
+        // MVP monolith: the table already exists via schema.sql. No synchronize
+        // here — avoids TypeORM overwriting the hand-applied schema in a shared environment.
         synchronize: false,
       }),
     }),

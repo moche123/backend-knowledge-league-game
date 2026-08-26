@@ -13,7 +13,7 @@ export class DisputeChatMessage {
   @Column({ type: 'uuid', name: 'match_id' })
   matchId!: string;
 
-  // Opcional — el reclamo puede ser sobre una pregunta puntual o general al match.
+  // Optional — the dispute can be about a specific question or general to the match.
   @Column({ type: 'uuid', name: 'question_id', nullable: true })
   questionId!: string | null;
 

@@ -20,10 +20,10 @@ export class RankingService {
     private readonly tournamentRepository: Repository<Tournament>,
   ) {}
 
-  // Se llama al cerrar un match (closed o walkover) y de nuevo cada vez que
-  // un override de admin le cambia el resultado (Fase 10) — por eso borra
-  // primero cualquier entrada vieja de ESTE match antes de insertar, así
-  // queda correcta sin duplicar ni dejar puntos viejos dando vueltas.
+  // Called when a match closes (closed or walkover), and again whenever an
+  // admin override changes its result (Fase 10) — that's why it deletes any
+  // old entries for THIS match first before inserting, so it stays correct
+  // without duplicating or leaving stale points floating around.
   async recordMatchResult(match: Match, eventId: string): Promise<void> {
     await this.rankingRepository.delete({ matchId: match.id });
 
@@ -53,14 +53,14 @@ export class RankingService {
     }
   }
 
-  // Borra el ledger de un match reabierto (Fase 10) — vuelve a jugarse desde
-  // cero, no debe seguir sumando el resultado viejo.
+  // Clears the ledger for a reopened match (Fase 10) — it's played again
+  // from scratch, the old result shouldn't keep counting.
   async clearMatchResult(matchId: string): Promise<void> {
     await this.rankingRepository.delete({ matchId });
   }
 
-  // Ranking global vivo — reconstruido sumando el ledger (sin Redis en el
-  // MVP monolito, ver CLAUDE.md).
+  // Live global ranking — rebuilt by summing the ledger (no Redis in the
+  // MVP monolith, see CLAUDE.md).
   async getGlobalLeaderboard(): Promise<LeaderboardRow[]> {
     return this.queryLeaderboard();
   }
