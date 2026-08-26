@@ -36,6 +36,8 @@ There is deliberately **no `question` module** — questions used to live in a s
 
 For the exact, currently-correct list of every endpoint with working `curl` examples, see **`curl-commands.md`** in this directory — it's updated every time an endpoint is added or changed, and is more trustworthy than prose summaries (including this one) if they ever disagree.
 
+Interactive Swagger UI is also served at **`/docs`** once the app is running (`http://localhost:3000/docs` by default) — every route, DTO and role requirement, generated from the code via `@nestjs/swagger`. Click "Authorize" and paste an `accessToken` from `POST /auth/login` to call protected routes straight from the browser.
+
 ## Auth module
 
 - `POST /auth/register` — creates a user (always role `player` — the first admin is bootstrapped by hand in the DB), hashes the password with bcrypt, returns `{ accessToken, refreshToken, user }`.

@@ -1,15 +1,16 @@
+import { ApiProperty } from '@nestjs/swagger';
 import { UserRole } from '../entities/user.entity';
 
 export class PublicUserDto {
-  id!: string;
-  name!: string;
-  email!: string;
-  role!: UserRole;
-  createdAt!: Date;
+  @ApiProperty() id!: string;
+  @ApiProperty() name!: string;
+  @ApiProperty() email!: string;
+  @ApiProperty({ enum: UserRole }) role!: UserRole;
+  @ApiProperty() createdAt!: Date;
 }
 
 export class AuthResponseDto {
-  accessToken!: string;
-  refreshToken!: string;
-  user!: PublicUserDto;
+  @ApiProperty() accessToken!: string;
+  @ApiProperty() refreshToken!: string;
+  @ApiProperty({ type: PublicUserDto }) user!: PublicUserDto;
 }
