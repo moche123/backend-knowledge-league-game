@@ -1,16 +1,13 @@
 
-## AUTHENTICATION --
+## AUTHENTICATION
 
-### LOGIN 
+### LOGIN
 
-curl --data "email=carlos@gmail.com&password=12345678" http://localhost:3000/auth/login (ADMIN)
-curl --data "email=cesar@gmail.com&password=12345678" http://localhost:3000/auth/login
-curl --data "email=luis@gmail.com&password=12345678" http://localhost:3000/auth/login
+curl --data "email=PASTE_EMAIL_HERE&password=PASTE_PASSWORD_HERE" http://localhost:3000/auth/login
 
-### REGISTER 
+### REGISTER
 
-curl --data "name=Carlos&email=carlos@gmail.com&password=12345678" http://localhost:3000/auth/register
-
+curl --data "name=PASTE_NAME_HERE&email=PASTE_EMAIL_HERE&password=PASTE_PASSWORD_HERE" http://localhost:3000/auth/register
 
 ### REFRESH TOKEN (usa el refreshToken devuelto por login/register)
 
@@ -42,42 +39,27 @@ curl -X PATCH -H "Content-Type: application/json" -H "Authorization: Bearer PAST
 
 curl -X DELETE -H "Authorization: Bearer PASTE_ACCESS_TOKEN_HERE" http://localhost:3000/tournament/events/PASTE_EVENT_ID_HERE
 
-## REGISTRATIONS --
+## REGISTRATIONS
 
 ### REGISTER SELF (jugador se inscribe)
 
 curl -X POST -H "Authorization: Bearer PASTE_ACCESS_TOKEN_HERE" http://localhost:3000/tournament/events/PASTE_EVENT_ID_HERE/registrations
 
-
-curl -X POST -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxNTU0NTBmYS0xYTFkLTQ0M2EtOWQzNC00NjIzZTY2YjA2NDYiLCJlbWFpbCI6ImNhcmxvc0BnbWFpbC5jb20iLCJyb2xlIjoiYWRtaW4iLCJpYXQiOjE3ODc2NzU5NjQsImV4cCI6MTc4Nzc2MjM2NH0.bYwp-R7yuu5HHVV-uR45AM-vaCLOmndVY34ERN2M5Zs" http://localhost:3000/tournament/events/79ff6494-9b26-440e-8d1a-d32a36edd643/registrations
-
 ### LIST REGISTRATIONS (autenticado)
 
 curl -H "Authorization: Bearer PASTE_ACCESS_TOKEN_HERE" http://localhost:3000/tournament/events/PASTE_EVENT_ID_HERE/registrations
-
-curl -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI3ZmRiMjU5MC03ZTBjLTRiMjQtYTg5Yy04ZTg1MzYzODA3NTQiLCJlbWFpbCI6Imx1aXNAZ21haWwuY29tIiwicm9sZSI6InBsYXllciIsImlhdCI6MTc4NzY3NTQ2MywiZXhwIjoxNzg3NzYxODYzfQ.NA4hyzzclznUuNvMq3EdsU6uXJTXbWcnBvZuqU0IjG4" http://localhost:3000/tournament/events/79ff6494-9b26-440e-8d1a-d32a36edd643/registrations
 
 ### UNREGISTER SELF (jugador se da de baja, solo si el evento sigue registration_open)
 
 curl -X DELETE -H "Authorization: Bearer PASTE_ACCESS_TOKEN_HERE" http://localhost:3000/tournament/events/PASTE_EVENT_ID_HERE/registrations/me
 
-
-curl -X DELETE -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI3ZmRiMjU5MC03ZTBjLTRiMjQtYTg5Yy04ZTg1MzYzODA3NTQiLCJlbWFpbCI6Imx1aXNAZ21haWwuY29tIiwicm9sZSI6InBsYXllciIsImlhdCI6MTc4NzY3NTQ2MywiZXhwIjoxNzg3NzYxODYzfQ.NA4hyzzclznUuNvMq3EdsU6uXJTXbWcnBvZuqU0IjG4" http://localhost:3000/tournament/events/79ff6494-9b26-440e-8d1a-d32a36edd643/registrations/me
-
 ### ADMIN REGISTERS A PLAYER
 
 curl -X POST -H "Authorization: Bearer PASTE_ACCESS_TOKEN_HERE" http://localhost:3000/tournament/events/PASTE_EVENT_ID_HERE/registrations/PASTE_USER_ID_HERE
 
-
-curl -X POST -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxNTU0NTBmYS0xYTFkLTQ0M2EtOWQzNC00NjIzZTY2YjA2NDYiLCJlbWFpbCI6ImNhcmxvc0BnbWFpbC5jb20iLCJyb2xlIjoiYWRtaW4iLCJpYXQiOjE3ODc2NzYwOTgsImV4cCI6MTc4Nzc2MjQ5OH0.1nDXHj1b6JKhl98Aj1C0-64Cs1VN0rZe936L6aMr4AA" http://localhost:3000/tournament/events/79ff6494-9b26-440e-8d1a-d32a36edd643/registrations/7fdb2590-7e0c-4b24-a89c-8e8536380754
-
-
-
 ### ADMIN UNREGISTERS A PLAYER
 
 curl -X DELETE -H "Authorization: Bearer PASTE_ACCESS_TOKEN_HERE" http://localhost:3000/tournament/events/PASTE_EVENT_ID_HERE/registrations/PASTE_USER_ID_HERE
-
-curl -X DELETE -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxNTU0NTBmYS0xYTFkLTQ0M2EtOWQzNC00NjIzZTY2YjA2NDYiLCJlbWFpbCI6ImNhcmxvc0BnbWFpbC5jb20iLCJyb2xlIjoiYWRtaW4iLCJpYXQiOjE3ODc2NzYwOTgsImV4cCI6MTc4Nzc2MjQ5OH0.1nDXHj1b6JKhl98Aj1C0-64Cs1VN0rZe936L6aMr4AA" http://localhost:3000/tournament/events/79ff6494-9b26-440e-8d1a-d32a36edd643/registrations/f602dd80-6412-4a02-9928-94fb05bb3018
 
 ## STAGES / BRACKET
 
