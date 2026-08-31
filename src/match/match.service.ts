@@ -29,11 +29,9 @@ import { Registration } from '../registration/entities/registration.entity';
 import { Tournament } from '../tournament/entities/tournament.entity';
 import { DisputeChatMessage } from '../dispute-chat/entities/dispute-chat-message.entity';
 import { User, UserRole } from '../auth/entities/user.entity';
-import { PublicUserDto } from '../auth/dto/auth-response.dto';
 import type { AuthenticatedUser } from '../auth/strategies/jwt.strategy';
 
 const PG_UNIQUE_VIOLATION = '23505';
-const PG_EXCLUSION_VIOLATION = '23P01';
 
 function round2(value: number): number {
   return Math.round(value * 100) / 100;
@@ -80,17 +78,15 @@ export class MatchService {
     return this.getMatchOrThrow(eventId, matchId);
   }
 
-  // Admin sets or updates the schedule — allowed while the match hasn't
-  // started yet, or to reschedule one that expired unplayed. Generates (or
-  // regenerates, if it already had one) this match's own question set via AI —
-  // no shared bank, each match pulls its questions when scheduled, not when
-  // started. If the AI call fails, the reschedule isn't saved either (it's
-  // validated and generated BEFORE touching the time).
-  //
-  // Also (re-)assigns a referee: a random pick — no AI — among referees free
-  // for the new window, re-rolled on every (re)schedule same as the questions.
-  // If none is free, the match is left without one (doesn't block scheduling)
-  // — admin can assign one by hand afterward via setReferee().
+  // Admin sets or updates the schedule (start time + duration) — allowed while
+  // the match hasn't started yet, or to reschedule one that expired unplayed.
+  // Same call generates (or, if it already had one, regenerates from scratch)
+  // this match's question set via AI — no shared bank, each match owns its
+  // own, and there's no separate "generate" step. (2026-08-31, explicit user
+  // decision — a same-day earlier version split scheduling and generation
+  // into two actions gated on participants/referee; reverted, generation is
+  // simply "click Schedule match".) If the AI call fails, the reschedule isn't
+  // saved either (validated and generated BEFORE touching the time).
   async schedule(
     eventId: string,
     matchId: string,
@@ -107,97 +103,33 @@ export class MatchService {
     }
 
     const scheduledStartAt = new Date(dto.scheduledStartAt);
-    const scheduledEndAt = new Date(dto.scheduledEndAt);
-    if (scheduledEndAt <= scheduledStartAt) {
-      throw new BadRequestException(
-        'scheduledEndAt must be after scheduledStartAt',
-      );
-    }
+    const scheduledEndAt = new Date(
+      scheduledStartAt.getTime() + dto.durationMinutes * 60_000,
+    );
 
     await this.matchQuestionGenerationService.generateForMatch(
       eventId,
       match.id,
     );
 
-    const availableReferees = await this.findAvailableReferees(
-      scheduledStartAt,
-      scheduledEndAt,
-      match.id,
-    );
-    const randomReferee =
-      availableReferees.length > 0
-        ? availableReferees[
-            Math.floor(Math.random() * availableReferees.length)
-          ]
-        : null;
-
     match.scheduledStartAt = scheduledStartAt;
     match.scheduledEndAt = scheduledEndAt;
     match.status = MatchStatus.PENDING;
-    match.refereeId = randomReferee?.id ?? null;
     return this.matchRepository.save(match);
   }
 
-  // Referees with no other scheduled match (any status but "expired" — that
-  // one never happened, doesn't hold their calendar) overlapping [startAt, endAt).
-  private async findAvailableReferees(
-    startAt: Date,
-    endAt: Date,
-    excludeMatchId: string,
-  ): Promise<User[]> {
-    return this.userRepository
-      .createQueryBuilder('u')
-      .where('u.role = :role', { role: UserRole.REFEREE })
-      .andWhere(
-        `NOT EXISTS (
-           SELECT 1 FROM matches m
-           WHERE m.referee_id = u.id
-             AND m.id != :excludeMatchId
-             AND m.status != :expired
-             AND m.scheduled_start_at IS NOT NULL
-             AND tstzrange(m.scheduled_start_at, m.scheduled_end_at) && tstzrange(:startAt, :endAt)
-         )`,
-        { excludeMatchId, expired: MatchStatus.EXPIRED, startAt, endAt },
-      )
-      .orderBy('u.name', 'ASC')
-      .getMany();
-  }
-
-  // Admin's "change referee" picker — only referees free for this match's
-  // current scheduled window (must already be scheduled).
-  async listAvailableReferees(
-    eventId: string,
-    matchId: string,
-  ): Promise<PublicUserDto[]> {
-    const match = await this.getMatchOrThrow(eventId, matchId);
-    if (!match.scheduledStartAt || !match.scheduledEndAt) {
-      throw new BadRequestException('Match has not been scheduled yet');
-    }
-    const referees = await this.findAvailableReferees(
-      match.scheduledStartAt,
-      match.scheduledEndAt,
-      match.id,
-    );
-    return referees.map((referee) => ({
-      id: referee.id,
-      name: referee.name,
-      email: referee.email,
-      role: referee.role,
-      createdAt: referee.createdAt,
-    }));
-  }
-
-  // Admin overrides the auto-assigned referee, picking a specific one — meant
-  // to be chosen from listAvailableReferees()'s result, but re-validated here
-  // (calendar EXCLUDE constraint) in case of a race.
+  // Admin assigns/changes the match referee — manual only, no auto-pick, no
+  // time-slot/calendar check. Same pre-match gate as editParticipants().
   async setReferee(
     eventId: string,
     matchId: string,
     dto: SetMatchRefereeDto,
   ): Promise<Match> {
     const match = await this.getMatchOrThrow(eventId, matchId);
-    if (!match.scheduledStartAt || !match.scheduledEndAt) {
-      throw new BadRequestException('Match has not been scheduled yet');
+    if (match.status !== MatchStatus.PENDING) {
+      throw new ConflictException(
+        `Cannot assign a referee to a match with status "${match.status}"`,
+      );
     }
 
     const referee = await this.userRepository.findOne({
@@ -210,17 +142,7 @@ export class MatchService {
     }
 
     match.refereeId = dto.refereeId;
-    try {
-      return await this.matchRepository.save(match);
-    } catch (error) {
-      const code = (error as { code?: string }).code;
-      if (code === PG_EXCLUSION_VIOLATION) {
-        throw new ConflictException(
-          'That referee is already assigned to another match overlapping this time window',
-        );
-      }
-      throw error;
-    }
+    return this.matchRepository.save(match);
   }
 
   // Admin changes one or both participants — only before the match starts
@@ -416,7 +338,7 @@ export class MatchService {
     const firstQuestion = questions.find((question) => question.position === 1);
     if (!firstQuestion) {
       throw new ConflictException(
-        'Match has no questions generated yet — reschedule it to generate them',
+        'Match has no questions generated yet — schedule it to generate them',
       );
     }
     await this.assertScoreBudget(eventId, questions);

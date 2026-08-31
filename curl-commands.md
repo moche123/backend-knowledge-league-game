@@ -168,27 +168,18 @@ curl -H "Authorization: Bearer PASTE_ACCESS_TOKEN_HERE" \
 
 #### Schedule / reschedule match — admin
 
-Sets the estimated start and end time. Generates (or **regenerates**, if it already had one) this match's questions via AI (Moonshot) on the fly — requires `MOONSHOT_API_KEY` in `.env`. Also **auto-assigns a referee**: a random pick (no AI) among referees with no other match overlapping this window — re-rolled on every (re)schedule. Left `null` if none is free; check the response's `refereeId`.
+Sets `scheduledStartAt` + `durationMinutes` (`scheduledEndAt` is computed as `start + duration`). Generates (or **regenerates**, if it already had one) this match's questions via AI (Moonshot) in the same call — requires `MOONSHOT_API_KEY` in `.env`. No separate "generate" step; this is the trigger.
 
 ```bash
 curl -X PATCH -H "Content-Type: application/json" \
   -H "Authorization: Bearer PASTE_ACCESS_TOKEN_HERE" \
-  -d '{"scheduledStartAt":"2026-09-01T15:00:00Z","scheduledEndAt":"2026-09-01T15:30:00Z"}' \
+  -d '{"scheduledStartAt":"2026-09-01T15:00:00Z","durationMinutes":30}' \
   http://localhost:3000/tournament/events/PASTE_EVENT_ID_HERE/matches/PASTE_MATCH_ID_HERE/schedule
 ```
 
-#### List referees available for a match — admin
+#### Assign / change the match referee — admin
 
-Referees free for this match's current scheduled window (must be scheduled first) — used to populate a "change referee" picker.
-
-```bash
-curl -H "Authorization: Bearer PASTE_ACCESS_TOKEN_HERE" \
-  http://localhost:3000/tournament/events/PASTE_EVENT_ID_HERE/matches/PASTE_MATCH_ID_HERE/referees/available
-```
-
-#### Override the assigned referee — admin
-
-Picks a specific referee (should come from the list above). Returns 409 if that referee actually has another match overlapping this window (race).
+Manual only — no auto-pick, no calendar/time-slot check. Same pre-match gate as editing participants (match must be `pending`). Pick the referee id from `GET /auth/users?role=referee`.
 
 ```bash
 curl -X PATCH -H "Content-Type: application/json" \
@@ -210,7 +201,7 @@ curl -X PATCH -H "Content-Type: application/json" \
 
 #### Start match — admin or referee
 
-Fails if `scheduledStartAt` hasn't arrived yet, or if the match has no generated questions (reschedule it first).
+Fails if `scheduledStartAt` hasn't arrived yet, or if the match has no generated questions (schedule it first).
 
 ```bash
 curl -X POST -H "Authorization: Bearer PASTE_ACCESS_TOKEN_HERE" \

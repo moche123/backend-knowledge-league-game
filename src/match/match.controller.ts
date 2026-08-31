@@ -31,9 +31,8 @@ import { UpdateMatchQuestionDto } from './dto/update-match-question.dto';
 import { MatchService } from './match.service';
 
 // GET    /tournament/events/:eventId/matches/:matchId               — authenticated
-// PATCH  /tournament/events/:eventId/matches/:matchId/schedule      — admin, generates/regenerates the match's questions + auto-assigns a free referee (random, no AI)
-// GET    /tournament/events/:eventId/matches/:matchId/referees/available — admin, referees free for this match's scheduled window
-// PATCH  /tournament/events/:eventId/matches/:matchId/referee       — admin, overrides the auto-assigned referee
+// PATCH  /tournament/events/:eventId/matches/:matchId/schedule      — admin, sets start time + duration AND generates/regenerates the match's questions via AI
+// PATCH  /tournament/events/:eventId/matches/:matchId/referee       — admin, assigns/changes the referee (manual, pre-match only)
 // PATCH  /tournament/events/:eventId/matches/:matchId/participants  — admin, pre-match only
 // POST   /tournament/events/:eventId/matches/:matchId/start         — admin or referee
 // POST   /tournament/events/:eventId/matches/:matchId/end           — admin or referee
@@ -71,7 +70,7 @@ export class MatchController {
   @ApiOperation({
     summary: 'Schedule or reschedule a match (admin)',
     description:
-      "Sets scheduledStartAt/scheduledEndAt, generates (or, if it already had one, regenerates from scratch) this match's question set via AI (Moonshot/Kimi, requires MOONSHOT_API_KEY), and auto-assigns a referee — a random pick (no AI) among referees free for the new window, re-rolled every time. Left unassigned if none is free.",
+      "Sets scheduledStartAt + durationMinutes (scheduledEndAt is computed) and generates (or, if it already had one, regenerates from scratch) this match's question set via AI (Moonshot/Kimi). Requires MOONSHOT_API_KEY.",
   })
   @ApiParam({ name: 'matchId' })
   @Roles(UserRole.ADMIN)
@@ -85,24 +84,9 @@ export class MatchController {
   }
 
   @ApiOperation({
-    summary: "List referees free for this match's scheduled window (admin)",
+    summary: 'Assign or change the match referee (admin)',
     description:
-      'Used to populate the "change referee" picker. The match must already be scheduled.',
-  })
-  @ApiParam({ name: 'matchId' })
-  @Roles(UserRole.ADMIN)
-  @Get(':matchId/referees/available')
-  listAvailableReferees(
-    @Param('eventId') eventId: string,
-    @Param('matchId') matchId: string,
-  ) {
-    return this.matchService.listAvailableReferees(eventId, matchId);
-  }
-
-  @ApiOperation({
-    summary: 'Override the auto-assigned referee (admin)',
-    description:
-      'Picks a specific referee — meant to come from the /referees/available list. Rejected (409) if that referee turns out to have another match overlapping this window.',
+      'Manual only — no auto-pick, no calendar/time-slot check. Same pre-match gate as editing participants (match must be "pending").',
   })
   @ApiParam({ name: 'matchId' })
   @Roles(UserRole.ADMIN)
