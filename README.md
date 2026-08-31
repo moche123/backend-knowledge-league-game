@@ -7,7 +7,7 @@
 
 
 
-NestJS backend for **Liga del Saber**, a knockout knowledge-tournament platform where each match is a free-text quiz graded by an AI evaluator. Full product/architecture docs live at the repo root — see [Where to look next](#where-to-look-next).
+NestJS backend for **Know League**, a knockout knowledge-tournament platform where each match is a free-text quiz graded by an AI evaluator. Full product/architecture docs live at the repo root — see [Where to look next](#where-to-look-next).
 
 ## Current stage: MVP monolith — backend complete
 

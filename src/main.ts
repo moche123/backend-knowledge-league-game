@@ -5,6 +5,7 @@ import { AppModule } from './app.module';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
+  app.enableCors({ origin: true, credentials: true });
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,
@@ -14,7 +15,7 @@ async function bootstrap() {
   );
 
   const config = new DocumentBuilder()
-    .setTitle('Liga del Saber API')
+    .setTitle('Know League API')
     .setDescription(
       'Knockout knowledge-tournament platform where each match is a free-text quiz graded by an AI evaluator. ' +
         'Most routes require a JWT (obtained from POST /auth/login or /auth/register) — click "Authorize" and paste the accessToken.',

@@ -1,4 +1,4 @@
-# Liga del Saber — API curl reference
+# Know League — API curl reference
 
 `curl` examples for every implemented endpoint. Replace the placeholders (`PASTE_..._HERE`) with real values — most flows start with `POST /auth/login` to get the `accessToken`.
 
