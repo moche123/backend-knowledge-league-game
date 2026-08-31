@@ -20,6 +20,7 @@ import {
 import { AuthService } from './auth.service';
 import { AuthResponseDto, PublicUserDto } from './dto/auth-response.dto';
 import { CreateAuthDto } from './dto/create-auth.dto';
+import { CreateUserByAdminDto } from './dto/create-user-by-admin.dto';
 import { LoginAuthDto } from './dto/login-auth.dto';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
 import { Public } from './decorators/public.decorator';
@@ -68,6 +69,19 @@ export class AuthController {
   @Post('logout')
   logout(@CurrentUser() user: AuthenticatedUser) {
     return this.authService.logout(user.id);
+  }
+
+  @ApiOperation({
+    summary: 'Create a player or referee account (admin)',
+    description:
+      'Role is restricted to player/referee — admin accounts are never created through this, only bootstrapped by hand in the DB.',
+  })
+  @ApiOkResponse({ type: PublicUserDto })
+  @ApiBearerAuth('access-token')
+  @Roles(UserRole.ADMIN)
+  @Post('users')
+  createUser(@Body() dto: CreateUserByAdminDto) {
+    return this.authService.createUserAsAdmin(dto);
   }
 
   @ApiOperation({

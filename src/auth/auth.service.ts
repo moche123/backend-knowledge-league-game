@@ -10,6 +10,7 @@ import { JwtService, JwtSignOptions } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
 import { Repository } from 'typeorm';
 import { CreateAuthDto } from './dto/create-auth.dto';
+import { CreateUserByAdminDto } from './dto/create-user-by-admin.dto';
 import { LoginAuthDto } from './dto/login-auth.dto';
 import { AuthResponseDto, PublicUserDto } from './dto/auth-response.dto';
 import { User, UserRole } from './entities/user.entity';
@@ -112,6 +113,36 @@ export class AuthService {
       refreshTokenHash: null,
       refreshTokenExpiresAt: null,
     });
+  }
+
+  // Admin creates a player or referee account directly (never admin — that
+  // stays a manual DB bootstrap). Same uniqueness/hashing rules as public
+  // register(), just with an admin-chosen role and no tokens issued for it —
+  // the admin isn't logging in as this new account.
+  async createUserAsAdmin(dto: CreateUserByAdminDto): Promise<PublicUserDto> {
+    const existing = await this.usersRepository.findOne({
+      where: { email: dto.email },
+    });
+    if (existing) {
+      throw new ConflictException('Email already registered');
+    }
+
+    const passwordHash = await bcrypt.hash(dto.password, SALT_ROUNDS);
+    const user = this.usersRepository.create({
+      name: dto.name,
+      email: dto.email,
+      passwordHash,
+      role: dto.role,
+    });
+    await this.usersRepository.save(user);
+
+    return {
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      role: user.role,
+      createdAt: user.createdAt,
+    };
   }
 
   // Admin-only directory search, used to pick an existing player to register
