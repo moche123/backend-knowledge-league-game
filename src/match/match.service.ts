@@ -9,6 +9,7 @@ import {
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { InjectRepository } from '@nestjs/typeorm';
 import { LessThan, Repository } from 'typeorm';
+import { CreateMatchQuestionDto } from './dto/create-match-question.dto';
 import { EditParticipantsDto } from './dto/edit-participants.dto';
 import { OverrideAnswerScoreDto } from './dto/override-answer-score.dto';
 import { ReopenMatchDto } from './dto/reopen-match.dto';
@@ -24,11 +25,16 @@ import { Stage } from '../stage/entities/stage.entity';
 import { StageService } from '../stage/stage.service';
 import { RankingService } from '../ranking/ranking.service';
 import { Registration } from '../registration/entities/registration.entity';
+import { Tournament } from '../tournament/entities/tournament.entity';
 import { DisputeChatMessage } from '../dispute-chat/entities/dispute-chat-message.entity';
 import { UserRole } from '../auth/entities/user.entity';
 import type { AuthenticatedUser } from '../auth/strategies/jwt.strategy';
 
 const PG_UNIQUE_VIOLATION = '23505';
+
+function round2(value: number): number {
+  return Math.round(value * 100) / 100;
+}
 
 export interface CurrentQuestionView {
   position: number;
@@ -57,6 +63,8 @@ export class MatchService {
     private readonly answerRepository: Repository<Answer>,
     @InjectRepository(DisputeChatMessage)
     private readonly chatMessageRepository: Repository<DisputeChatMessage>,
+    @InjectRepository(Tournament)
+    private readonly tournamentRepository: Repository<Tournament>,
     private readonly matchQuestionGenerationService: MatchQuestionGenerationService,
     private readonly matchScoringService: MatchScoringService,
     private readonly stageService: StageService,
@@ -293,14 +301,17 @@ export class MatchService {
       );
     }
 
-    const firstQuestion = await this.matchQuestionRepository.findOne({
-      where: { matchId: match.id, position: 1 },
+    const questions = await this.matchQuestionRepository.find({
+      where: { matchId: match.id },
+      order: { position: 'ASC' },
     });
+    const firstQuestion = questions.find((question) => question.position === 1);
     if (!firstQuestion) {
       throw new ConflictException(
         'Match has no questions generated yet — reschedule it to generate them',
       );
     }
+    await this.assertScoreBudget(eventId, questions);
 
     firstQuestion.activatedAt = new Date();
     await this.matchQuestionRepository.save(firstQuestion);
@@ -493,8 +504,8 @@ export class MatchService {
     return question;
   }
 
-  // Content correction only, while the match hasn't started — questions
-  // can't be added to or removed from the batch (see CLAUDE.md).
+  // Content/score correction, while the match hasn't started. A maxScore
+  // change must still fit the event's budget alongside every other question.
   async updateQuestion(
     eventId: string,
     matchId: string,
@@ -508,8 +519,141 @@ export class MatchService {
       );
     }
     const question = await this.findOneQuestion(eventId, matchId, questionId);
+
+    if (dto.maxScore !== undefined) {
+      const others = await this.matchQuestionRepository.find({
+        where: { matchId },
+      });
+      await this.assertWithinBudget(
+        eventId,
+        others.filter((other) => other.id !== questionId),
+        dto.maxScore,
+      );
+    }
+
     Object.assign(question, dto);
     return this.matchQuestionRepository.save(question);
+  }
+
+  // Manual addition to the batch (admin) — while the match hasn't started
+  // and there's still budget left under the event's maxScorePerMatch.
+  async createQuestion(
+    eventId: string,
+    matchId: string,
+    dto: CreateMatchQuestionDto,
+  ): Promise<MatchQuestion> {
+    const match = await this.getMatchOrThrow(eventId, matchId);
+    if (match.status !== MatchStatus.PENDING) {
+      throw new ConflictException(
+        `Cannot add questions to a match with status "${match.status}"`,
+      );
+    }
+
+    const existing = await this.matchQuestionRepository.find({
+      where: { matchId },
+      order: { position: 'ASC' },
+    });
+    await this.assertWithinBudget(eventId, existing, dto.maxScore);
+
+    const question = this.matchQuestionRepository.create({
+      matchId,
+      position: existing.length + 1,
+      text: dto.text,
+      rubric: dto.rubric,
+      maxScore: dto.maxScore,
+      timeLimit: dto.timeLimit,
+    });
+    return this.matchQuestionRepository.save(question);
+  }
+
+  // Removes one question from the batch (admin) — while the match hasn't
+  // started, and only if at least one question would remain.
+  async deleteQuestion(
+    eventId: string,
+    matchId: string,
+    questionId: string,
+  ): Promise<void> {
+    const match = await this.getMatchOrThrow(eventId, matchId);
+    if (match.status !== MatchStatus.PENDING) {
+      throw new ConflictException(
+        `Cannot remove questions from a match with status "${match.status}"`,
+      );
+    }
+
+    const existing = await this.matchQuestionRepository.find({
+      where: { matchId },
+      order: { position: 'ASC' },
+    });
+    if (!existing.some((question) => question.id === questionId)) {
+      throw new NotFoundException(`Question #${questionId} not found`);
+    }
+    if (existing.length === 1) {
+      throw new ConflictException('Cannot remove the last question of a match');
+    }
+
+    const remaining = existing.filter((question) => question.id !== questionId);
+    await this.matchQuestionRepository.delete({ id: questionId, matchId });
+    // Re-sequence so positions stay contiguous 1..N — start() looks up
+    // position 1 specifically, and gaps would break that after a mid-batch delete.
+    await Promise.all(
+      remaining.map((question, index) =>
+        question.position === index + 1
+          ? Promise.resolve()
+          : this.matchQuestionRepository.update(question.id, {
+              position: index + 1,
+            }),
+      ),
+    );
+  }
+
+  // A question set may sit under budget while being edited (nothing forces
+  // filling it immediately), but must never go OVER it — and must land on
+  // EXACTLY the budget before the match can start (enforced in start()).
+  private async assertWithinBudget(
+    eventId: string,
+    otherQuestions: MatchQuestion[],
+    candidateScore: number,
+  ): Promise<void> {
+    const event = await this.tournamentRepository.findOne({
+      where: { id: eventId },
+    });
+    if (!event) {
+      throw new NotFoundException(`Event #${eventId} not found`);
+    }
+    const budget = Number(event.maxScorePerMatch);
+    const othersTotal = otherQuestions.reduce(
+      (sum, question) => sum + Number(question.maxScore),
+      0,
+    );
+    const nextTotal = round2(othersTotal + candidateScore);
+    if (nextTotal > budget) {
+      throw new ConflictException(
+        `This would bring the match's total to ${nextTotal}, over the event's ${budget}-point budget (currently ${round2(othersTotal)} used).`,
+      );
+    }
+  }
+
+  // Called right before a match starts — the one point where the total is
+  // required to be exact, not just "not over".
+  private async assertScoreBudget(
+    eventId: string,
+    questions: MatchQuestion[],
+  ): Promise<void> {
+    const event = await this.tournamentRepository.findOne({
+      where: { id: eventId },
+    });
+    if (!event) {
+      throw new NotFoundException(`Event #${eventId} not found`);
+    }
+    const budget = Number(event.maxScorePerMatch);
+    const total = round2(
+      questions.reduce((sum, question) => sum + Number(question.maxScore), 0),
+    );
+    if (Math.abs(total - budget) > 0.01) {
+      throw new ConflictException(
+        `Questions must add up to exactly ${budget} points before starting the match (currently ${total}).`,
+      );
+    }
   }
 
   // Nobody started it before the estimated end time — no scores, admin

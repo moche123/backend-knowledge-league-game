@@ -1,6 +1,7 @@
 import {
   ConflictException,
   Injectable,
+  NotFoundException,
   UnauthorizedException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -10,7 +11,7 @@ import * as bcrypt from 'bcrypt';
 import { Repository } from 'typeorm';
 import { CreateAuthDto } from './dto/create-auth.dto';
 import { LoginAuthDto } from './dto/login-auth.dto';
-import { AuthResponseDto } from './dto/auth-response.dto';
+import { AuthResponseDto, PublicUserDto } from './dto/auth-response.dto';
 import { User, UserRole } from './entities/user.entity';
 import { JwtPayload } from './strategies/jwt.strategy';
 
@@ -111,6 +112,46 @@ export class AuthService {
       refreshTokenHash: null,
       refreshTokenExpiresAt: null,
     });
+  }
+
+  // Admin-only directory search, used to pick an existing player to register
+  // for an event (no account creation here — that's a separate admin feature).
+  async listPlayers(search?: string): Promise<PublicUserDto[]> {
+    const query = this.usersRepository
+      .createQueryBuilder('u')
+      .where('u.role = :role', { role: UserRole.PLAYER });
+
+    const trimmed = search?.trim();
+    if (trimmed) {
+      query.andWhere('(u.name ILIKE :search OR u.email ILIKE :search)', {
+        search: `%${trimmed}%`,
+      });
+    }
+
+    const users = await query.orderBy('u.name', 'ASC').limit(20).getMany();
+    return users.map((user) => ({
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      role: user.role,
+      createdAt: user.createdAt,
+    }));
+  }
+
+  // Admin-only — resolves a single user's public info (e.g. displaying a real
+  // name for an event's registrations, which only store a userId).
+  async getPublicUser(userId: string): Promise<PublicUserDto> {
+    const user = await this.usersRepository.findOne({ where: { id: userId } });
+    if (!user) {
+      throw new NotFoundException(`User #${userId} not found`);
+    }
+    return {
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      role: user.role,
+      createdAt: user.createdAt,
+    };
   }
 
   private async buildAuthResponse(user: User): Promise<AuthResponseDto> {

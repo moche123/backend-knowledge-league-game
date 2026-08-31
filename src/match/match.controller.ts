@@ -1,6 +1,17 @@
-import { Body, Controller, Get, Param, Patch, Post } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  HttpCode,
+  HttpStatus,
+  Param,
+  Patch,
+  Post,
+} from '@nestjs/common';
 import {
   ApiBearerAuth,
+  ApiNoContentResponse,
   ApiOperation,
   ApiParam,
   ApiTags,
@@ -9,6 +20,7 @@ import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { UserRole } from '../auth/entities/user.entity';
 import type { AuthenticatedUser } from '../auth/strategies/jwt.strategy';
+import { CreateMatchQuestionDto } from './dto/create-match-question.dto';
 import { EditParticipantsDto } from './dto/edit-participants.dto';
 import { OverrideAnswerScoreDto } from './dto/override-answer-score.dto';
 import { ReopenMatchDto } from './dto/reopen-match.dto';
@@ -17,19 +29,21 @@ import { SubmitAnswerDto } from './dto/submit-answer.dto';
 import { UpdateMatchQuestionDto } from './dto/update-match-question.dto';
 import { MatchService } from './match.service';
 
-// GET   /tournament/events/:eventId/matches/:matchId               — authenticated
-// PATCH /tournament/events/:eventId/matches/:matchId/schedule      — admin, generates/regenerates the match's questions
-// PATCH /tournament/events/:eventId/matches/:matchId/participants  — admin, pre-match only
-// POST  /tournament/events/:eventId/matches/:matchId/start         — admin or referee
-// POST  /tournament/events/:eventId/matches/:matchId/end           — admin or referee
-// GET   /tournament/events/:eventId/matches/:matchId/current-question — player (only the match's 2)
-// POST  /tournament/events/:eventId/matches/:matchId/answers          — player (only the match's 2)
-// GET   /tournament/events/:eventId/matches/:matchId/answers          — participants (only after closing) or admin/referee
-// GET   /tournament/events/:eventId/matches/:matchId/questions        — admin/referee, full question set (with rubric)
-// GET   /tournament/events/:eventId/matches/:matchId/questions/:id    — admin/referee
-// PATCH /tournament/events/:eventId/matches/:matchId/questions/:id    — admin, content correction, pre-match only
-// PATCH /tournament/events/:eventId/matches/:matchId/answers/:answerId/override — admin, Fase 10, post-match only
-// POST  /tournament/events/:eventId/matches/:matchId/reopen                    — admin, Fase 10, repeats the match from scratch
+// GET    /tournament/events/:eventId/matches/:matchId               — authenticated
+// PATCH  /tournament/events/:eventId/matches/:matchId/schedule      — admin, generates/regenerates the match's questions
+// PATCH  /tournament/events/:eventId/matches/:matchId/participants  — admin, pre-match only
+// POST   /tournament/events/:eventId/matches/:matchId/start         — admin or referee
+// POST   /tournament/events/:eventId/matches/:matchId/end           — admin or referee
+// GET    /tournament/events/:eventId/matches/:matchId/current-question — player (only the match's 2)
+// POST   /tournament/events/:eventId/matches/:matchId/answers          — player (only the match's 2)
+// GET    /tournament/events/:eventId/matches/:matchId/answers          — participants (only after closing) or admin/referee
+// GET    /tournament/events/:eventId/matches/:matchId/questions        — admin/referee, full question set (with rubric)
+// POST   /tournament/events/:eventId/matches/:matchId/questions        — admin, add one question, pre-match only, must fit the score budget
+// GET    /tournament/events/:eventId/matches/:matchId/questions/:id    — admin/referee
+// PATCH  /tournament/events/:eventId/matches/:matchId/questions/:id    — admin, content/score correction, pre-match only
+// DELETE /tournament/events/:eventId/matches/:matchId/questions/:id    — admin, remove one question, pre-match only, keeps at least one
+// PATCH  /tournament/events/:eventId/matches/:matchId/answers/:answerId/override — admin, Fase 10, post-match only
+// POST   /tournament/events/:eventId/matches/:matchId/reopen                    — admin, Fase 10, repeats the match from scratch
 @ApiTags('matches')
 @ApiBearerAuth('access-token')
 @ApiParam({ name: 'eventId', description: 'Event id' })
@@ -167,6 +181,22 @@ export class MatchController {
     return this.matchService.findQuestionsForMatch(eventId, matchId);
   }
 
+  @ApiOperation({
+    summary: 'Add one question to the match (admin)',
+    description:
+      "Pre-match only. Rejected if it would push the batch's total maxScore over the event's maxScorePerMatch budget.",
+  })
+  @ApiParam({ name: 'matchId' })
+  @Roles(UserRole.ADMIN)
+  @Post(':matchId/questions')
+  createQuestion(
+    @Param('eventId') eventId: string,
+    @Param('matchId') matchId: string,
+    @Body() dto: CreateMatchQuestionDto,
+  ) {
+    return this.matchService.createQuestion(eventId, matchId, dto);
+  }
+
   @ApiOperation({ summary: 'Get one match question by id (admin or referee)' })
   @ApiParam({ name: 'matchId' })
   @ApiParam({ name: 'questionId' })
@@ -181,9 +211,9 @@ export class MatchController {
   }
 
   @ApiOperation({
-    summary: "Correct a generated question's content (admin)",
+    summary: "Correct a question's content or score (admin)",
     description:
-      "Content fix only — questions can't be added or removed from the batch, only while the match is still pending.",
+      'Pre-match only. A maxScore change is rejected if it would push the total over budget.',
   })
   @ApiParam({ name: 'matchId' })
   @ApiParam({ name: 'questionId' })
@@ -196,6 +226,25 @@ export class MatchController {
     @Body() dto: UpdateMatchQuestionDto,
   ) {
     return this.matchService.updateQuestion(eventId, matchId, questionId, dto);
+  }
+
+  @ApiOperation({
+    summary: 'Remove one question from the match (admin)',
+    description:
+      'Pre-match only. Rejected if it would remove the last remaining question.',
+  })
+  @ApiParam({ name: 'matchId' })
+  @ApiParam({ name: 'questionId' })
+  @ApiNoContentResponse()
+  @Roles(UserRole.ADMIN)
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @Delete(':matchId/questions/:questionId')
+  deleteQuestion(
+    @Param('eventId') eventId: string,
+    @Param('matchId') matchId: string,
+    @Param('questionId') questionId: string,
+  ) {
+    return this.matchService.deleteQuestion(eventId, matchId, questionId);
   }
 
   @ApiOperation({

@@ -8,8 +8,9 @@ import {
   MinLength,
 } from 'class-validator';
 
-// Content correction only — questions can't be added to or removed from the
-// batch (generated together, with scores that sum to exactly the budget).
+// Edits one question's content/score. A maxScore change is only accepted if
+// the match's total still fits the event's maxScorePerMatch budget — see
+// MatchService.assertScoreBudget.
 export class UpdateMatchQuestionDto {
   @ApiPropertyOptional()
   @IsOptional()
