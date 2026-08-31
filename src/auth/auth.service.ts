@@ -1,5 +1,6 @@
 import {
   ConflictException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
   UnauthorizedException,
@@ -145,21 +146,33 @@ export class AuthService {
     };
   }
 
-  // Admin-only directory search, used to pick an existing player to register
-  // for an event (no account creation here — that's a separate admin feature).
-  async listPlayers(search?: string): Promise<PublicUserDto[]> {
-    const query = this.usersRepository
-      .createQueryBuilder('u')
-      .where('u.role = :role', { role: UserRole.PLAYER });
+  // Admin-only directory. Two callers share this: the event-registration
+  // typeahead (always passes `search`, wants only players, capped short list)
+  // and the admin users management page (lists/filters player+referee, no cap).
+  // `role` defaults to PLAYER to keep the typeahead's existing behavior intact.
+  async listUsers(
+    search?: string,
+    role: UserRole | 'all' = UserRole.PLAYER,
+  ): Promise<PublicUserDto[]> {
+    const query = this.usersRepository.createQueryBuilder('u');
+
+    if (role === 'all') {
+      query.where('u.role IN (:...roles)', {
+        roles: [UserRole.PLAYER, UserRole.REFEREE],
+      });
+    } else {
+      query.where('u.role = :role', { role });
+    }
 
     const trimmed = search?.trim();
     if (trimmed) {
       query.andWhere('(u.name ILIKE :search OR u.email ILIKE :search)', {
         search: `%${trimmed}%`,
       });
+      query.limit(20);
     }
 
-    const users = await query.orderBy('u.name', 'ASC').limit(20).getMany();
+    const users = await query.orderBy('u.name', 'ASC').getMany();
     return users.map((user) => ({
       id: user.id,
       name: user.name,
@@ -183,6 +196,34 @@ export class AuthService {
       role: user.role,
       createdAt: user.createdAt,
     };
+  }
+
+  // Admin-only. Never deletes an admin account (those aren't managed through
+  // this endpoint at all). A user with existing matches/answers/chat messages
+  // etc. can't be deleted outright (no cascade for those FKs) — surfaced as a
+  // 409 rather than a raw DB error.
+  async deleteUser(userId: string): Promise<void> {
+    const user = await this.usersRepository.findOne({ where: { id: userId } });
+    if (!user) {
+      throw new NotFoundException(`User #${userId} not found`);
+    }
+    if (user.role === UserRole.ADMIN) {
+      throw new ForbiddenException('Admin accounts cannot be deleted here.');
+    }
+
+    try {
+      await this.usersRepository.delete(userId);
+    } catch (error) {
+      const code =
+        (error as { code?: string; driverError?: { code?: string } })
+          ?.driverError?.code ?? (error as { code?: string })?.code;
+      if (code === '23503') {
+        throw new ConflictException(
+          'This user has related records (matches, answers, chat messages, etc.) and cannot be deleted.',
+        );
+      }
+      throw error;
+    }
   }
 
   private async buildAuthResponse(user: User): Promise<AuthResponseDto> {

@@ -25,12 +25,15 @@ import { EditParticipantsDto } from './dto/edit-participants.dto';
 import { OverrideAnswerScoreDto } from './dto/override-answer-score.dto';
 import { ReopenMatchDto } from './dto/reopen-match.dto';
 import { ScheduleMatchDto } from './dto/schedule-match.dto';
+import { SetMatchRefereeDto } from './dto/set-match-referee.dto';
 import { SubmitAnswerDto } from './dto/submit-answer.dto';
 import { UpdateMatchQuestionDto } from './dto/update-match-question.dto';
 import { MatchService } from './match.service';
 
 // GET    /tournament/events/:eventId/matches/:matchId               — authenticated
-// PATCH  /tournament/events/:eventId/matches/:matchId/schedule      — admin, generates/regenerates the match's questions
+// PATCH  /tournament/events/:eventId/matches/:matchId/schedule      — admin, generates/regenerates the match's questions + auto-assigns a free referee (random, no AI)
+// GET    /tournament/events/:eventId/matches/:matchId/referees/available — admin, referees free for this match's scheduled window
+// PATCH  /tournament/events/:eventId/matches/:matchId/referee       — admin, overrides the auto-assigned referee
 // PATCH  /tournament/events/:eventId/matches/:matchId/participants  — admin, pre-match only
 // POST   /tournament/events/:eventId/matches/:matchId/start         — admin or referee
 // POST   /tournament/events/:eventId/matches/:matchId/end           — admin or referee
@@ -68,7 +71,7 @@ export class MatchController {
   @ApiOperation({
     summary: 'Schedule or reschedule a match (admin)',
     description:
-      "Sets scheduledStartAt/scheduledEndAt and generates (or, if it already had one, regenerates from scratch) this match's question set via AI (Moonshot/Kimi). Requires MOONSHOT_API_KEY.",
+      "Sets scheduledStartAt/scheduledEndAt, generates (or, if it already had one, regenerates from scratch) this match's question set via AI (Moonshot/Kimi, requires MOONSHOT_API_KEY), and auto-assigns a referee — a random pick (no AI) among referees free for the new window, re-rolled every time. Left unassigned if none is free.",
   })
   @ApiParam({ name: 'matchId' })
   @Roles(UserRole.ADMIN)
@@ -79,6 +82,37 @@ export class MatchController {
     @Body() dto: ScheduleMatchDto,
   ) {
     return this.matchService.schedule(eventId, matchId, dto);
+  }
+
+  @ApiOperation({
+    summary: "List referees free for this match's scheduled window (admin)",
+    description:
+      'Used to populate the "change referee" picker. The match must already be scheduled.',
+  })
+  @ApiParam({ name: 'matchId' })
+  @Roles(UserRole.ADMIN)
+  @Get(':matchId/referees/available')
+  listAvailableReferees(
+    @Param('eventId') eventId: string,
+    @Param('matchId') matchId: string,
+  ) {
+    return this.matchService.listAvailableReferees(eventId, matchId);
+  }
+
+  @ApiOperation({
+    summary: 'Override the auto-assigned referee (admin)',
+    description:
+      'Picks a specific referee — meant to come from the /referees/available list. Rejected (409) if that referee turns out to have another match overlapping this window.',
+  })
+  @ApiParam({ name: 'matchId' })
+  @Roles(UserRole.ADMIN)
+  @Patch(':matchId/referee')
+  setReferee(
+    @Param('eventId') eventId: string,
+    @Param('matchId') matchId: string,
+    @Body() dto: SetMatchRefereeDto,
+  ) {
+    return this.matchService.setReferee(eventId, matchId, dto);
   }
 
   @ApiOperation({

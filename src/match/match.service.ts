@@ -14,6 +14,7 @@ import { EditParticipantsDto } from './dto/edit-participants.dto';
 import { OverrideAnswerScoreDto } from './dto/override-answer-score.dto';
 import { ReopenMatchDto } from './dto/reopen-match.dto';
 import { ScheduleMatchDto } from './dto/schedule-match.dto';
+import { SetMatchRefereeDto } from './dto/set-match-referee.dto';
 import { SubmitAnswerDto } from './dto/submit-answer.dto';
 import { UpdateMatchQuestionDto } from './dto/update-match-question.dto';
 import { Answer } from './entities/answer.entity';
@@ -27,10 +28,12 @@ import { RankingService } from '../ranking/ranking.service';
 import { Registration } from '../registration/entities/registration.entity';
 import { Tournament } from '../tournament/entities/tournament.entity';
 import { DisputeChatMessage } from '../dispute-chat/entities/dispute-chat-message.entity';
-import { UserRole } from '../auth/entities/user.entity';
+import { User, UserRole } from '../auth/entities/user.entity';
+import { PublicUserDto } from '../auth/dto/auth-response.dto';
 import type { AuthenticatedUser } from '../auth/strategies/jwt.strategy';
 
 const PG_UNIQUE_VIOLATION = '23505';
+const PG_EXCLUSION_VIOLATION = '23P01';
 
 function round2(value: number): number {
   return Math.round(value * 100) / 100;
@@ -65,6 +68,8 @@ export class MatchService {
     private readonly chatMessageRepository: Repository<DisputeChatMessage>,
     @InjectRepository(Tournament)
     private readonly tournamentRepository: Repository<Tournament>,
+    @InjectRepository(User)
+    private readonly userRepository: Repository<User>,
     private readonly matchQuestionGenerationService: MatchQuestionGenerationService,
     private readonly matchScoringService: MatchScoringService,
     private readonly stageService: StageService,
@@ -81,6 +86,11 @@ export class MatchService {
   // no shared bank, each match pulls its questions when scheduled, not when
   // started. If the AI call fails, the reschedule isn't saved either (it's
   // validated and generated BEFORE touching the time).
+  //
+  // Also (re-)assigns a referee: a random pick — no AI — among referees free
+  // for the new window, re-rolled on every (re)schedule same as the questions.
+  // If none is free, the match is left without one (doesn't block scheduling)
+  // — admin can assign one by hand afterward via setReferee().
   async schedule(
     eventId: string,
     matchId: string,
@@ -109,10 +119,108 @@ export class MatchService {
       match.id,
     );
 
+    const availableReferees = await this.findAvailableReferees(
+      scheduledStartAt,
+      scheduledEndAt,
+      match.id,
+    );
+    const randomReferee =
+      availableReferees.length > 0
+        ? availableReferees[
+            Math.floor(Math.random() * availableReferees.length)
+          ]
+        : null;
+
     match.scheduledStartAt = scheduledStartAt;
     match.scheduledEndAt = scheduledEndAt;
     match.status = MatchStatus.PENDING;
+    match.refereeId = randomReferee?.id ?? null;
     return this.matchRepository.save(match);
+  }
+
+  // Referees with no other scheduled match (any status but "expired" — that
+  // one never happened, doesn't hold their calendar) overlapping [startAt, endAt).
+  private async findAvailableReferees(
+    startAt: Date,
+    endAt: Date,
+    excludeMatchId: string,
+  ): Promise<User[]> {
+    return this.userRepository
+      .createQueryBuilder('u')
+      .where('u.role = :role', { role: UserRole.REFEREE })
+      .andWhere(
+        `NOT EXISTS (
+           SELECT 1 FROM matches m
+           WHERE m.referee_id = u.id
+             AND m.id != :excludeMatchId
+             AND m.status != :expired
+             AND m.scheduled_start_at IS NOT NULL
+             AND tstzrange(m.scheduled_start_at, m.scheduled_end_at) && tstzrange(:startAt, :endAt)
+         )`,
+        { excludeMatchId, expired: MatchStatus.EXPIRED, startAt, endAt },
+      )
+      .orderBy('u.name', 'ASC')
+      .getMany();
+  }
+
+  // Admin's "change referee" picker — only referees free for this match's
+  // current scheduled window (must already be scheduled).
+  async listAvailableReferees(
+    eventId: string,
+    matchId: string,
+  ): Promise<PublicUserDto[]> {
+    const match = await this.getMatchOrThrow(eventId, matchId);
+    if (!match.scheduledStartAt || !match.scheduledEndAt) {
+      throw new BadRequestException('Match has not been scheduled yet');
+    }
+    const referees = await this.findAvailableReferees(
+      match.scheduledStartAt,
+      match.scheduledEndAt,
+      match.id,
+    );
+    return referees.map((referee) => ({
+      id: referee.id,
+      name: referee.name,
+      email: referee.email,
+      role: referee.role,
+      createdAt: referee.createdAt,
+    }));
+  }
+
+  // Admin overrides the auto-assigned referee, picking a specific one — meant
+  // to be chosen from listAvailableReferees()'s result, but re-validated here
+  // (calendar EXCLUDE constraint) in case of a race.
+  async setReferee(
+    eventId: string,
+    matchId: string,
+    dto: SetMatchRefereeDto,
+  ): Promise<Match> {
+    const match = await this.getMatchOrThrow(eventId, matchId);
+    if (!match.scheduledStartAt || !match.scheduledEndAt) {
+      throw new BadRequestException('Match has not been scheduled yet');
+    }
+
+    const referee = await this.userRepository.findOne({
+      where: { id: dto.refereeId },
+    });
+    if (!referee || referee.role !== UserRole.REFEREE) {
+      throw new BadRequestException(
+        `#${dto.refereeId} is not a referee account`,
+      );
+    }
+
+    match.refereeId = dto.refereeId;
+    try {
+      return await this.matchRepository.save(match);
+    } catch (error) {
+      const code = (error as { code?: string }).code;
+      if (code === PG_EXCLUSION_VIOLATION) {
+        throw new ConflictException(
+          'That referee is already assigned to another match overlapping this time window',
+        );
+      }
+      throw error;
+    }
   }
 
   // Admin changes one or both participants — only before the match starts

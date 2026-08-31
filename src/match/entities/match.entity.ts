@@ -41,6 +41,12 @@ export class Match {
   @Column({ type: 'uuid', name: 'winner_id', nullable: true })
   winnerId!: string | null;
 
+  // Auto-assigned (random, no AI) among free referees when the match is
+  // scheduled/rescheduled — re-picked every time. Admin can override it
+  // afterward from a list of referees free for this slot.
+  @Column({ type: 'uuid', name: 'referee_id', nullable: true })
+  refereeId!: string | null;
+
   @Column({ type: 'numeric', name: 'score_a', nullable: true })
   scoreA!: number | null;
 

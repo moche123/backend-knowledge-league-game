@@ -1,5 +1,6 @@
 import {
   Controller,
+  Delete,
   Get,
   HttpCode,
   HttpStatus,
@@ -85,17 +86,25 @@ export class AuthController {
   }
 
   @ApiOperation({
-    summary: 'Search existing player accounts (admin)',
+    summary: 'List/search player and referee accounts (admin)',
     description:
-      'Used to pick an existing player when registering them for an event — not account creation.',
+      'Used both by the event-registration typeahead (search, players only by default) and the admin users management page (role filter, no search needed).',
   })
   @ApiQuery({ name: 'search', required: false })
+  @ApiQuery({
+    name: 'role',
+    required: false,
+    enum: ['player', 'referee', 'all'],
+  })
   @ApiOkResponse({ type: PublicUserDto, isArray: true })
   @ApiBearerAuth('access-token')
   @Roles(UserRole.ADMIN)
   @Get('users')
-  listPlayers(@Query('search') search?: string) {
-    return this.authService.listPlayers(search);
+  listUsers(
+    @Query('search') search?: string,
+    @Query('role') role?: UserRole | 'all',
+  ) {
+    return this.authService.listUsers(search, role);
   }
 
   @ApiOperation({ summary: "Get one user's public info (admin)" })
@@ -106,5 +115,16 @@ export class AuthController {
   @Get('users/:id')
   getUser(@Param('id') id: string) {
     return this.authService.getPublicUser(id);
+  }
+
+  @ApiOperation({ summary: 'Delete a player or referee account (admin)' })
+  @ApiParam({ name: 'id' })
+  @ApiNoContentResponse()
+  @ApiBearerAuth('access-token')
+  @Roles(UserRole.ADMIN)
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @Delete('users/:id')
+  deleteUser(@Param('id') id: string) {
+    return this.authService.deleteUser(id);
   }
 }

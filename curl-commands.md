@@ -168,13 +168,33 @@ curl -H "Authorization: Bearer PASTE_ACCESS_TOKEN_HERE" \
 
 #### Schedule / reschedule match — admin
 
-Sets the estimated start and end time. Generates (or **regenerates**, if it already had one) this match's questions via AI (Moonshot) on the fly — requires `MOONSHOT_API_KEY` in `.env`.
+Sets the estimated start and end time. Generates (or **regenerates**, if it already had one) this match's questions via AI (Moonshot) on the fly — requires `MOONSHOT_API_KEY` in `.env`. Also **auto-assigns a referee**: a random pick (no AI) among referees with no other match overlapping this window — re-rolled on every (re)schedule. Left `null` if none is free; check the response's `refereeId`.
 
 ```bash
 curl -X PATCH -H "Content-Type: application/json" \
   -H "Authorization: Bearer PASTE_ACCESS_TOKEN_HERE" \
   -d '{"scheduledStartAt":"2026-09-01T15:00:00Z","scheduledEndAt":"2026-09-01T15:30:00Z"}' \
   http://localhost:3000/tournament/events/PASTE_EVENT_ID_HERE/matches/PASTE_MATCH_ID_HERE/schedule
+```
+
+#### List referees available for a match — admin
+
+Referees free for this match's current scheduled window (must be scheduled first) — used to populate a "change referee" picker.
+
+```bash
+curl -H "Authorization: Bearer PASTE_ACCESS_TOKEN_HERE" \
+  http://localhost:3000/tournament/events/PASTE_EVENT_ID_HERE/matches/PASTE_MATCH_ID_HERE/referees/available
+```
+
+#### Override the assigned referee — admin
+
+Picks a specific referee (should come from the list above). Returns 409 if that referee actually has another match overlapping this window (race).
+
+```bash
+curl -X PATCH -H "Content-Type: application/json" \
+  -H "Authorization: Bearer PASTE_ACCESS_TOKEN_HERE" \
+  -d '{"refereeId":"PASTE_REFEREE_ID_HERE"}' \
+  http://localhost:3000/tournament/events/PASTE_EVENT_ID_HERE/matches/PASTE_MATCH_ID_HERE/referee
 ```
 
 #### Edit participants — admin

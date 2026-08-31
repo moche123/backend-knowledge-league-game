@@ -9,6 +9,7 @@ import { Registration } from '../registration/entities/registration.entity';
 import { Tournament } from '../tournament/entities/tournament.entity';
 import { RankingModule } from '../ranking/ranking.module';
 import { DisputeChatMessage } from '../dispute-chat/entities/dispute-chat-message.entity';
+import { User } from '../auth/entities/user.entity';
 import { MatchController } from './match.controller';
 import { MatchQuestionGenerationService } from './match-question-generation.service';
 import { MatchScoringService } from './match-scoring.service';
@@ -24,6 +25,7 @@ import { MatchService } from './match.service';
       MatchQuestion,
       Answer,
       DisputeChatMessage,
+      User,
     ]),
     StageModule,
     RankingModule,

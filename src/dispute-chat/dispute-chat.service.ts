@@ -11,13 +11,14 @@ import { DisputeChatMessage } from './entities/dispute-chat-message.entity';
 import { Match } from '../match/entities/match.entity';
 import { MatchQuestion } from '../match/entities/match-question.entity';
 import { Stage } from '../stage/entities/stage.entity';
-import { Tournament } from '../tournament/entities/tournament.entity';
 import { UserRole } from '../auth/entities/user.entity';
 import type { AuthenticatedUser } from '../auth/strategies/jwt.strategy';
 
-// In-match dispute chat — the match's players, the event's assigned referee,
-// and admin as participants (see CLAUDE.md). Admin can resolve disputes based
-// on what's discussed here; overriding the AI score is Fase 10 (out of scope here).
+// In-match dispute chat — the match's players, its assigned referee (auto-
+// picked when the match was scheduled, or overridden by admin — see
+// MatchService.schedule/setReferee), and admin as participants (see
+// CLAUDE.md). Admin can resolve disputes based on what's discussed here;
+// overriding the AI score is Fase 10 (out of scope here).
 @Injectable()
 export class DisputeChatService {
   constructor(
@@ -27,8 +28,6 @@ export class DisputeChatService {
     private readonly matchRepository: Repository<Match>,
     @InjectRepository(Stage)
     private readonly stageRepository: Repository<Stage>,
-    @InjectRepository(Tournament)
-    private readonly tournamentRepository: Repository<Tournament>,
     @InjectRepository(MatchQuestion)
     private readonly matchQuestionRepository: Repository<MatchQuestion>,
   ) {}
@@ -104,11 +103,8 @@ export class DisputeChatService {
       return match;
     }
     if (requester.role === UserRole.REFEREE) {
-      const event = await this.tournamentRepository.findOne({
-        where: { id: eventId },
-      });
-      if (!event || event.refereeId !== requester.id) {
-        throw new ForbiddenException('Not the referee assigned to this event');
+      if (match.refereeId !== requester.id) {
+        throw new ForbiddenException('Not the referee assigned to this match');
       }
       return match;
     }
