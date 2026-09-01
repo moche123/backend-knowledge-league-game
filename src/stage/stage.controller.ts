@@ -13,6 +13,9 @@ import { StageService } from './stage.service';
 //   and draws the first stage (creates the event's full stage tree).
 // POST /tournament/events/:eventId/stages/cancel — admin, undoes the draw entirely
 //   (in_progress only), resets the event back to registration_open.
+// POST /tournament/events/:eventId/stages/:stageId/redraw — admin, re-shuffles
+//   ONE already-drawn stage's matchups (new seed) — only while every match
+//   in it is still pending.
 // GET  /tournament/events/:eventId/stages       — authenticated, view the bracket.
 @ApiTags('stages')
 @ApiBearerAuth('access-token')
@@ -41,6 +44,21 @@ export class StageController {
   @Post('cancel')
   cancelBracket(@Param('eventId') eventId: string) {
     return this.stageService.cancelBracket(eventId);
+  }
+
+  @ApiOperation({
+    summary: "Re-shuffle one already-drawn stage's matchups (admin)",
+    description:
+      'Draws a fresh, verifiable seed for this stage only, keeping the same participant pool. Only while every match in the stage is still pending — once any has started, its result is real and this is rejected (edit participants on individual pending matches instead).',
+  })
+  @ApiParam({ name: 'stageId' })
+  @Roles(UserRole.ADMIN)
+  @Post(':stageId/redraw')
+  redrawStage(
+    @Param('eventId') eventId: string,
+    @Param('stageId') stageId: string,
+  ) {
+    return this.stageService.redrawStage(eventId, stageId);
   }
 
   @ApiOperation({

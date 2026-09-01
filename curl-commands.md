@@ -155,6 +155,15 @@ curl -X POST -H "Authorization: Bearer PASTE_ACCESS_TOKEN_HERE" \
   http://localhost:3000/tournament/events/PASTE_EVENT_ID_HERE/stages/cancel
 ```
 
+#### Redraw one stage — admin
+
+Re-shuffles ONE already-drawn stage's matchups (fresh seed, same participant pool) — e.g. reorder semifinal crosses before anyone's played. Only while every match in that stage is still `pending`; rejects with 409 once any has started, or if a slot is empty (fill it via `editParticipants` first).
+
+```bash
+curl -X POST -H "Authorization: Bearer PASTE_ACCESS_TOKEN_HERE" \
+  http://localhost:3000/tournament/events/PASTE_EVENT_ID_HERE/stages/PASTE_STAGE_ID_HERE/redraw
+```
+
 #### List stages + matches — authenticated
 
 View the full bracket.

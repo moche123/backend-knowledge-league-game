@@ -145,6 +145,66 @@ export class StageService {
     });
   }
 
+  // Re-shuffles ONE already-drawn stage with a fresh seed — for when the
+  // admin wants to redo a stage's matchups (2026-09-01, explicit user
+  // request) without wiping the whole event like cancelBracket() does.
+  // Keeps the exact same participant pool that's already on the stage's
+  // matches (for round_of_16+, that pool is whatever real winners/losers the
+  // previous stage produced — this doesn't re-derive that, just re-pairs
+  // who's already there) — only the pairing changes, not who's in it.
+  // Guarded to a stage where every match is still pending: once any match
+  // has started, its answers/questions/result are real and redrawing would
+  // destroy them, same reasoning as reopen()'s CLOSED-only gate in reverse.
+  async redrawStage(
+    eventId: string,
+    stageId: string,
+  ): Promise<StageWithMatches> {
+    const stage = await this.stageRepository.findOne({
+      where: { id: stageId, eventId },
+    });
+    if (!stage) {
+      throw new NotFoundException(`Stage #${stageId} not found`);
+    }
+
+    const matches = await this.matchRepository.find({ where: { stageId } });
+    if (matches.length === 0) {
+      throw new ConflictException('Stage has no matches drawn yet');
+    }
+    if (matches.some((match) => match.status !== MatchStatus.PENDING)) {
+      throw new ConflictException(
+        'Cannot redraw a stage once any of its matches has started — edit participants on individual pending matches instead',
+      );
+    }
+    const participantIds = matches.flatMap((match) => [
+      match.playerAId,
+      match.playerBId,
+    ]);
+    if (participantIds.some((id) => !id)) {
+      throw new ConflictException(
+        'Cannot redraw a stage with an empty player slot — fill it via editParticipants first',
+      );
+    }
+
+    return this.dataSource.transaction(async (manager) => {
+      await manager.delete(Match, { stageId });
+
+      const seed = generateSeed();
+      const pairs = drawPairs(participantIds as string[], seed);
+      const newMatches = pairs.map(([playerAId, playerBId]) =>
+        manager.create(Match, {
+          stageId,
+          playerAId,
+          playerBId,
+          status: MatchStatus.PENDING,
+        }),
+      );
+      const savedMatches = await manager.save(Match, newMatches);
+      await manager.update(Stage, stageId, { seed });
+
+      return { ...stage, seed, matches: savedMatches };
+    });
+  }
+
   // Called by MatchService whenever a match closes (closed/walkover). If that
   // was the stage's last pending match, draws the next stage(s) with the real
   // winners (and losers, for third_place). Idempotent: if the next stage
