@@ -471,6 +471,14 @@ export class MatchService {
         'Cannot start a match before its scheduled start time',
       );
     }
+    // Don't rely solely on expireOverdueMatches (runs once a minute) — check
+    // the deadline here too, so start() can't win a race against a cron tick
+    // that hasn't run yet.
+    if (match.scheduledEndAt && new Date() > match.scheduledEndAt) {
+      throw new ConflictException(
+        'Cannot start a match after its scheduled end time — it has expired, reschedule it',
+      );
+    }
 
     const questions = await this.matchQuestionRepository.find({
       where: { matchId: match.id },
