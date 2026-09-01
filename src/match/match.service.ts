@@ -305,20 +305,14 @@ export class MatchService {
       return saved;
     }
 
-    if (
-      match.status === MatchStatus.CLOSED ||
-      match.status === MatchStatus.WALKOVER
-    ) {
-      await this.reopen(eventId, matchId, requesterId, {
-        reason: 'Disqualification reversed by admin — match reset',
-      });
-      const reopened = await this.getMatchOrThrow(eventId, matchId);
-      reopened.disqualifiedPlayerId = null;
-      return this.matchRepository.save(reopened);
-    }
-
+    // Once the match closes, the disqualification is final for this event —
+    // deliberate, per-user decision (2026-09-01): a disqualified player has
+    // no path back into the same tournament, only into a future event. Only
+    // an in-progress mistake (disqualified the wrong player, reversed
+    // before the match's outcome is decided) can be undone — see the
+    // IN_PROGRESS branch above.
     throw new ConflictException(
-      `Cannot reinstate a player on a match with status "${match.status}"`,
+      `Cannot reinstate a player on a match with status "${match.status}" — disqualification is final once the match has closed`,
     );
   }
 
@@ -421,6 +415,16 @@ export class MatchService {
     ) {
       throw new ConflictException(
         `Cannot reopen a match with status "${match.status}"`,
+      );
+    }
+    // A disqualification is final for this event once the match closes —
+    // no path back in, not even via a reopen for an unrelated reason (e.g.
+    // plagiarism dispute). Admin must resolve via editParticipants on a
+    // still-pending downstream match instead, same as any other bracket
+    // correction.
+    if (match.disqualifiedPlayerId) {
+      throw new ConflictException(
+        'Cannot reopen a match with a disqualified player — disqualification is final for this event',
       );
     }
 

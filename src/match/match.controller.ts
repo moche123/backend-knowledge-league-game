@@ -36,7 +36,7 @@ import { MatchService } from './match.service';
 // PATCH  /tournament/events/:eventId/matches/:matchId/referee       — admin, assigns/changes the referee (manual, pre-match only)
 // PATCH  /tournament/events/:eventId/matches/:matchId/participants  — admin, pre-match only
 // POST   /tournament/events/:eventId/matches/:matchId/disqualify    — admin, live match only, blocks that player's answers
-// POST   /tournament/events/:eventId/matches/:matchId/reinstate     — admin, undoes a disqualification (reopens the match if it already closed)
+// POST   /tournament/events/:eventId/matches/:matchId/reinstate     — admin, undoes a disqualification (only while in_progress — final once closed)
 // POST   /tournament/events/:eventId/matches/:matchId/cancel        — admin, expired/in_progress only (edit a pending one instead) — the match will never be played
 // POST   /tournament/events/:eventId/matches/:matchId/start         — admin or referee
 // POST   /tournament/events/:eventId/matches/:matchId/end           — admin or referee
@@ -139,7 +139,7 @@ export class MatchController {
   @ApiOperation({
     summary: 'Reinstate a disqualified player (admin)',
     description:
-      'If the match is still in_progress, just clears the disqualification. If it already closed, this reopens it from scratch (Fase 10 reopen) — full reset, reschedule and re-confirm participants/referee afterward.',
+      'Only works while the match is still in_progress — clears the disqualification and the match continues normally. Once the match has closed (closed/walkover), the disqualification is final for this event — this returns 409, no path back in for that player this tournament.',
   })
   @ApiParam({ name: 'matchId' })
   @Roles(UserRole.ADMIN)
@@ -345,7 +345,7 @@ export class MatchController {
   @ApiOperation({
     summary: 'Reopen a closed match from scratch (admin, Fase 10)',
     description:
-      "Resets to pending, clearing answers/questions/scores/ranking for this match. Does not cascade into stages already drawn from the old winner. Logged as a system message in the match's dispute chat.",
+      "Resets to pending, clearing answers/questions/scores/ranking for this match. Does not cascade into stages already drawn from the old winner. Logged as a system message in the match's dispute chat. Rejects with 409 if the match has a disqualified player — disqualification is final for this event, not even an unrelated reopen (e.g. plagiarism) can bring them back.",
   })
   @ApiParam({ name: 'matchId' })
   @Roles(UserRole.ADMIN)

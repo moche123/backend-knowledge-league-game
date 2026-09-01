@@ -223,7 +223,7 @@ curl -X POST -H "Content-Type: application/json" \
 
 #### Reinstate a disqualified player — admin
 
-If the match is still `in_progress`, just clears the flag. If it already closed, this reopens it from scratch (same as Fase 10 `reopen` — answers/questions/ranking wiped, reschedule and re-confirm participants/referee afterward).
+Only works while the match is still `in_progress` — clears the flag, match continues normally. Once the match has closed (`closed`/`walkover`), returns 409: disqualification is final for this event, no path back in — the player would need a future event instead.
 
 ```bash
 curl -X POST -H "Authorization: Bearer PASTE_ACCESS_TOKEN_HERE" \
@@ -373,7 +373,7 @@ curl -X PATCH -H "Content-Type: application/json" \
 
 #### Reopen match — admin
 
-Repeats the match from scratch (e.g. plagiarism detected post-match): goes back to `pending`, clears answers/questions/score/ranking for that match.
+Repeats the match from scratch (e.g. plagiarism detected post-match): goes back to `pending`, clears answers/questions/score/ranking for that match. Rejects with 409 if the match has a disqualified player (`matches.disqualified_player_id` set) — disqualification is final for this event, this endpoint can't bring that player back either.
 
 ```bash
 curl -X POST -H "Content-Type: application/json" \
@@ -382,4 +382,4 @@ curl -X POST -H "Content-Type: application/json" \
   http://localhost:3000/tournament/events/PASTE_EVENT_ID_HERE/matches/PASTE_MATCH_ID_HERE/reopen
 ```
 
-> After reopening: use `PATCH .../participants` (unlocked again, back to `pending`) to substitute the disqualified player, and `PATCH .../schedule` to reschedule it (regenerates new questions).
+> After reopening: use `PATCH .../participants` (unlocked again, back to `pending`) to substitute the cheating player (this only works if they were never formally disqualified via `disqualify` — if they were, the reopen call above is rejected instead), and `PATCH .../schedule` to reschedule it (regenerates new questions).
