@@ -10,6 +10,7 @@ import { Cron, CronExpression } from '@nestjs/schedule';
 import { InjectRepository } from '@nestjs/typeorm';
 import { LessThan, Repository } from 'typeorm';
 import { CreateMatchQuestionDto } from './dto/create-match-question.dto';
+import { DisqualifyPlayerDto } from './dto/disqualify-player.dto';
 import { EditParticipantsDto } from './dto/edit-participants.dto';
 import { OverrideAnswerScoreDto } from './dto/override-answer-score.dto';
 import { ReopenMatchDto } from './dto/reopen-match.dto';
@@ -87,6 +88,10 @@ export class MatchService {
   // into two actions gated on participants/referee; reverted, generation is
   // simply "click Schedule match".) If the AI call fails, the reschedule isn't
   // saved either (validated and generated BEFORE touching the time).
+  //
+  // Requires both participants AND the referee already set (2026-08-31,
+  // explicit user decision), and the computed end time can't fall after the
+  // event's own end date.
   async schedule(
     eventId: string,
     matchId: string,
@@ -101,11 +106,30 @@ export class MatchService {
         `Cannot (re)schedule a match with status "${match.status}"`,
       );
     }
+    if (!match.playerAId || !match.playerBId) {
+      throw new BadRequestException(
+        'Both participants must be set before scheduling this match',
+      );
+    }
+    if (!match.refereeId) {
+      throw new BadRequestException(
+        'A referee must be assigned before scheduling this match',
+      );
+    }
 
     const scheduledStartAt = new Date(dto.scheduledStartAt);
     const scheduledEndAt = new Date(
       scheduledStartAt.getTime() + dto.durationMinutes * 60_000,
     );
+
+    const event = await this.tournamentRepository.findOneOrFail({
+      where: { id: eventId },
+    });
+    if (scheduledEndAt > event.endDate) {
+      throw new BadRequestException(
+        "Cannot schedule a match to end after the event's end date",
+      );
+    }
 
     await this.matchQuestionGenerationService.generateForMatch(
       eventId,
@@ -206,6 +230,123 @@ export class MatchService {
 
     match.playerAId = nextPlayerAId;
     match.playerBId = nextPlayerBId;
+    return this.matchRepository.save(match);
+  }
+
+  // Admin disqualifies a player from a LIVE match (2026-08-31, explicit user
+  // decision) — blocks them from submitting further answers (see
+  // submitAnswer()), but the match itself keeps running: the opponent still
+  // has to answer the remaining questions, and the final result is computed
+  // normally when it closes (the disqualified player's un-answered questions
+  // just score 0, same as anyone not answering a specific question — no new
+  // scoring logic needed). Reversible via reinstatePlayer().
+  async disqualifyPlayer(
+    eventId: string,
+    matchId: string,
+    requesterId: string,
+    dto: DisqualifyPlayerDto,
+  ): Promise<Match> {
+    const match = await this.getMatchOrThrow(eventId, matchId);
+    if (match.status !== MatchStatus.IN_PROGRESS) {
+      throw new ConflictException(
+        `Cannot disqualify a player from a match with status "${match.status}" — only a live match`,
+      );
+    }
+    if (dto.playerId !== match.playerAId && dto.playerId !== match.playerBId) {
+      throw new BadRequestException(
+        `User #${dto.playerId} is not a participant of this match`,
+      );
+    }
+
+    match.disqualifiedPlayerId = dto.playerId;
+    const saved = await this.matchRepository.save(match);
+
+    await this.chatMessageRepository.save(
+      this.chatMessageRepository.create({
+        matchId: match.id,
+        questionId: null,
+        authorId: requesterId,
+        text: `[System] Player #${dto.playerId} disqualified by admin.`,
+      }),
+    );
+
+    return saved;
+  }
+
+  // Undoes a disqualification. While the match is still in_progress, this is
+  // just clearing the flag. If the match already closed in the meantime (the
+  // opponent finished, or it auto-walked-over), there's no partial undo —
+  // this falls back to the existing reopen() flow (Fase 10): full reset,
+  // admin reschedules and re-confirms participants/referee from scratch.
+  // (2026-08-31, explicit user decision.)
+  async reinstatePlayer(
+    eventId: string,
+    matchId: string,
+    requesterId: string,
+  ): Promise<Match> {
+    const match = await this.getMatchOrThrow(eventId, matchId);
+    if (!match.disqualifiedPlayerId) {
+      throw new BadRequestException(
+        'This match has no disqualified player to reinstate',
+      );
+    }
+
+    if (match.status === MatchStatus.IN_PROGRESS) {
+      match.disqualifiedPlayerId = null;
+      const saved = await this.matchRepository.save(match);
+      await this.chatMessageRepository.save(
+        this.chatMessageRepository.create({
+          matchId: match.id,
+          questionId: null,
+          authorId: requesterId,
+          text: '[System] Disqualification reversed by admin — match continues.',
+        }),
+      );
+      return saved;
+    }
+
+    if (
+      match.status === MatchStatus.CLOSED ||
+      match.status === MatchStatus.WALKOVER
+    ) {
+      await this.reopen(eventId, matchId, requesterId, {
+        reason: 'Disqualification reversed by admin — match reset',
+      });
+      const reopened = await this.getMatchOrThrow(eventId, matchId);
+      reopened.disqualifiedPlayerId = null;
+      return this.matchRepository.save(reopened);
+    }
+
+    throw new ConflictException(
+      `Cannot reinstate a player on a match with status "${match.status}"`,
+    );
+  }
+
+  // Admin cancels a match — it will never be played (2026-08-31, explicit
+  // user decision: "simplemente dejalo en estado cancelado... ese match no
+  // se dará por tanto los participantes no podrán entrar ahí"). Allowed from
+  // `expired` (can't be played in its window, don't want to reschedule it)
+  // or `in_progress` (needs to stop a live one) — NOT `pending` (2026-08-31,
+  // explicit user correction: a pending match is meant to be *edited*
+  // — editParticipants/setReferee/reschedule — not cancelled; cancel doesn't
+  // add anything there). Never once it's already terminal
+  // (closed/walkover/cancelled — reopen covers correcting those).
+  // `start()` already rejects anything but `pending`, so this alone blocks
+  // players from ever (re)entering it. Deliberately does NOT touch bracket
+  // advancement — same limitation as the admin override/reopen: if this
+  // leaves a stage short a winner, the admin fixes it by hand.
+  async cancelMatch(eventId: string, matchId: string): Promise<Match> {
+    const match = await this.getMatchOrThrow(eventId, matchId);
+    if (
+      match.status !== MatchStatus.EXPIRED &&
+      match.status !== MatchStatus.IN_PROGRESS
+    ) {
+      throw new ConflictException(
+        `Cannot cancel a match with status "${match.status}"`,
+      );
+    }
+
+    match.status = MatchStatus.CANCELLED;
     return this.matchRepository.save(match);
   }
 
@@ -377,6 +518,11 @@ export class MatchService {
   ): Promise<Answer> {
     const match = await this.getMatchOrThrow(eventId, matchId);
     this.assertIsParticipant(match, playerId);
+    if (match.disqualifiedPlayerId === playerId) {
+      throw new ForbiddenException(
+        'You have been disqualified from this match',
+      );
+    }
     if (match.status !== MatchStatus.IN_PROGRESS) {
       throw new ConflictException('Match is not in progress');
     }

@@ -21,6 +21,7 @@ import { Roles } from '../auth/decorators/roles.decorator';
 import { UserRole } from '../auth/entities/user.entity';
 import type { AuthenticatedUser } from '../auth/strategies/jwt.strategy';
 import { CreateMatchQuestionDto } from './dto/create-match-question.dto';
+import { DisqualifyPlayerDto } from './dto/disqualify-player.dto';
 import { EditParticipantsDto } from './dto/edit-participants.dto';
 import { OverrideAnswerScoreDto } from './dto/override-answer-score.dto';
 import { ReopenMatchDto } from './dto/reopen-match.dto';
@@ -34,6 +35,9 @@ import { MatchService } from './match.service';
 // PATCH  /tournament/events/:eventId/matches/:matchId/schedule      — admin, sets start time + duration AND generates/regenerates the match's questions via AI
 // PATCH  /tournament/events/:eventId/matches/:matchId/referee       — admin, assigns/changes the referee (manual, pre-match only)
 // PATCH  /tournament/events/:eventId/matches/:matchId/participants  — admin, pre-match only
+// POST   /tournament/events/:eventId/matches/:matchId/disqualify    — admin, live match only, blocks that player's answers
+// POST   /tournament/events/:eventId/matches/:matchId/reinstate     — admin, undoes a disqualification (reopens the match if it already closed)
+// POST   /tournament/events/:eventId/matches/:matchId/cancel        — admin, expired/in_progress only (edit a pending one instead) — the match will never be played
 // POST   /tournament/events/:eventId/matches/:matchId/start         — admin or referee
 // POST   /tournament/events/:eventId/matches/:matchId/end           — admin or referee
 // GET    /tournament/events/:eventId/matches/:matchId/current-question — player (only the match's 2)
@@ -113,6 +117,54 @@ export class MatchController {
     @Body() dto: EditParticipantsDto,
   ) {
     return this.matchService.editParticipants(eventId, matchId, dto);
+  }
+
+  @ApiOperation({
+    summary: 'Disqualify a player from a live match (admin)',
+    description:
+      'Blocks that player from submitting further answers — the match keeps running for the opponent, closes normally when it\'s done. Only on a match with status "in_progress".',
+  })
+  @ApiParam({ name: 'matchId' })
+  @Roles(UserRole.ADMIN)
+  @Post(':matchId/disqualify')
+  disqualifyPlayer(
+    @Param('eventId') eventId: string,
+    @Param('matchId') matchId: string,
+    @Body() dto: DisqualifyPlayerDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.matchService.disqualifyPlayer(eventId, matchId, user.id, dto);
+  }
+
+  @ApiOperation({
+    summary: 'Reinstate a disqualified player (admin)',
+    description:
+      'If the match is still in_progress, just clears the disqualification. If it already closed, this reopens it from scratch (Fase 10 reopen) — full reset, reschedule and re-confirm participants/referee afterward.',
+  })
+  @ApiParam({ name: 'matchId' })
+  @Roles(UserRole.ADMIN)
+  @Post(':matchId/reinstate')
+  reinstatePlayer(
+    @Param('eventId') eventId: string,
+    @Param('matchId') matchId: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.matchService.reinstatePlayer(eventId, matchId, user.id);
+  }
+
+  @ApiOperation({
+    summary: 'Cancel a match (admin)',
+    description:
+      'It will never be played — start() rejects anything but "pending". Allowed from "expired" or "in_progress" only — a "pending" match should be edited instead (participants/referee/reschedule), not cancelled. Never once it\'s already terminal (closed/walkover/cancelled). Does NOT touch bracket advancement — if this leaves a stage short a winner, fix it by hand.',
+  })
+  @ApiParam({ name: 'matchId' })
+  @Roles(UserRole.ADMIN)
+  @Post(':matchId/cancel')
+  cancelMatch(
+    @Param('eventId') eventId: string,
+    @Param('matchId') matchId: string,
+  ) {
+    return this.matchService.cancelMatch(eventId, matchId);
   }
 
   @ApiOperation({

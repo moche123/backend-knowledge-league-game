@@ -9,8 +9,10 @@ import { Roles } from '../auth/decorators/roles.decorator';
 import { UserRole } from '../auth/entities/user.entity';
 import { StageService } from './stage.service';
 
-// POST /tournament/events/:eventId/stages/draw — admin, closes registration
+// POST /tournament/events/:eventId/stages/draw   — admin, closes registration
 //   and draws the first stage (creates the event's full stage tree).
+// POST /tournament/events/:eventId/stages/cancel — admin, undoes the draw entirely
+//   (in_progress only), resets the event back to registration_open.
 // GET  /tournament/events/:eventId/stages       — authenticated, view the bracket.
 @ApiTags('stages')
 @ApiBearerAuth('access-token')
@@ -28,6 +30,17 @@ export class StageController {
   @Post('draw')
   drawFirstStage(@Param('eventId') eventId: string) {
     return this.stageService.drawFirstStage(eventId);
+  }
+
+  @ApiOperation({
+    summary: 'Cancel an in-progress event, undoing the draw (admin)',
+    description:
+      "Deletes the full bracket (stages, matches, their questions/answers/chat, and this event's ranking entries) and resets the event to registration_open. Registrations are kept.",
+  })
+  @Roles(UserRole.ADMIN)
+  @Post('cancel')
+  cancelBracket(@Param('eventId') eventId: string) {
+    return this.stageService.cancelBracket(eventId);
   }
 
   @ApiOperation({

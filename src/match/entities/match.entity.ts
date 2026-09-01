@@ -12,6 +12,9 @@ export enum MatchStatus {
   WALKOVER = 'walkover',
   // Nobody started it before scheduledEndAt — no scores, needs rescheduling.
   EXPIRED = 'expired',
+  // Admin cancelled it by hand (from pending or expired, never once it
+  // started) — it will never be played.
+  CANCELLED = 'cancelled',
 }
 
 // The answer-questions / scoring / walkover-by-total-absence flow is added
@@ -46,6 +49,11 @@ export class Match {
   // afterward from a list of referees free for this slot.
   @Column({ type: 'uuid', name: 'referee_id', nullable: true })
   refereeId!: string | null;
+
+  // Set while the match is in_progress to block that player from submitting
+  // further answers — the match keeps running for the opponent. Reversible.
+  @Column({ type: 'uuid', name: 'disqualified_player_id', nullable: true })
+  disqualifiedPlayerId!: string | null;
 
   @Column({ type: 'numeric', name: 'score_a', nullable: true })
   scoreA!: number | null;

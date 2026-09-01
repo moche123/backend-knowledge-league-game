@@ -6,7 +6,6 @@ import {
   IsNumber,
   IsOptional,
   IsString,
-  IsUUID,
   Max,
   Min,
   MinLength,
@@ -55,14 +54,4 @@ export class CreateTournamentDto {
   @Min(0)
   @Max(100)
   maxScorePerMatch?: number;
-
-  // Optional: admin can assign it later (referee calendar is validated
-  // via excl_referee_calendar in Postgres whenever it's actually set).
-  @ApiPropertyOptional({
-    description:
-      'Can be assigned later. No two overlapping events may share a referee.',
-  })
-  @IsOptional()
-  @IsUUID()
-  refereeId?: string;
 }

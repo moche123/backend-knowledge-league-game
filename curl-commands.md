@@ -128,6 +128,8 @@ curl -X POST -H "Authorization: Bearer PASTE_ACCESS_TOKEN_HERE" \
 
 #### Admin unregisters a player
 
+If this player is currently slotted into a **pending** match, that match's slot is cleared (`playerAId`/`playerBId` set to `null` — assign a replacement afterward via `PATCH .../participants`). If they're in a **live** (`in_progress`) match, this is rejected (409) — disqualify them from the match instead (see Matches section).
+
 ```bash
 curl -X DELETE -H "Authorization: Bearer PASTE_ACCESS_TOKEN_HERE" \
   http://localhost:3000/tournament/events/PASTE_EVENT_ID_HERE/registrations/PASTE_USER_ID_HERE
@@ -142,6 +144,15 @@ Closes registration, builds the full stage tree, and draws the first one (requir
 ```bash
 curl -X POST -H "Authorization: Bearer PASTE_ACCESS_TOKEN_HERE" \
   http://localhost:3000/tournament/events/PASTE_EVENT_ID_HERE/stages/draw
+```
+
+#### Cancel — admin, undoes the draw
+
+Only on an `in_progress` event. Deletes the full bracket (stages → cascades to matches, their questions/answers/dispute chat, and this event's ranking ledger entries) and resets the event back to `registration_open`. Registrations are kept — same players, event becomes editable/re-drawable again.
+
+```bash
+curl -X POST -H "Authorization: Bearer PASTE_ACCESS_TOKEN_HERE" \
+  http://localhost:3000/tournament/events/PASTE_EVENT_ID_HERE/stages/cancel
 ```
 
 #### List stages + matches — authenticated
@@ -168,7 +179,7 @@ curl -H "Authorization: Bearer PASTE_ACCESS_TOKEN_HERE" \
 
 #### Schedule / reschedule match — admin
 
-Sets `scheduledStartAt` + `durationMinutes` (`scheduledEndAt` is computed as `start + duration`). Generates (or **regenerates**, if it already had one) this match's questions via AI (Moonshot) in the same call — requires `MOONSHOT_API_KEY` in `.env`. No separate "generate" step; this is the trigger.
+Sets `scheduledStartAt` + `durationMinutes` (`scheduledEndAt` is computed as `start + duration`). Generates (or **regenerates**, if it already had one) this match's questions via AI (Moonshot) in the same call — requires `MOONSHOT_API_KEY` in `.env`. No separate "generate" step; this is the trigger. Requires both `playerAId`/`playerBId` **and** `refereeId` already set (400 otherwise), and `scheduledEndAt` can't fall after the event's `endDate` (400 otherwise).
 
 ```bash
 curl -X PATCH -H "Content-Type: application/json" \
@@ -197,6 +208,35 @@ curl -X PATCH -H "Content-Type: application/json" \
   -H "Authorization: Bearer PASTE_ACCESS_TOKEN_HERE" \
   -d '{"playerAId":"PASTE_USER_ID_HERE"}' \
   http://localhost:3000/tournament/events/PASTE_EVENT_ID_HERE/matches/PASTE_MATCH_ID_HERE/participants
+```
+
+#### Disqualify a player — admin, live match only
+
+Blocks that player from submitting further answers. The match keeps running for the opponent — closes normally when it's done (the disqualified player's unanswered questions just score 0, same as anyone not answering a specific question).
+
+```bash
+curl -X POST -H "Content-Type: application/json" \
+  -H "Authorization: Bearer PASTE_ACCESS_TOKEN_HERE" \
+  -d '{"playerId":"PASTE_USER_ID_HERE"}' \
+  http://localhost:3000/tournament/events/PASTE_EVENT_ID_HERE/matches/PASTE_MATCH_ID_HERE/disqualify
+```
+
+#### Reinstate a disqualified player — admin
+
+If the match is still `in_progress`, just clears the flag. If it already closed, this reopens it from scratch (same as Fase 10 `reopen` — answers/questions/ranking wiped, reschedule and re-confirm participants/referee afterward).
+
+```bash
+curl -X POST -H "Authorization: Bearer PASTE_ACCESS_TOKEN_HERE" \
+  http://localhost:3000/tournament/events/PASTE_EVENT_ID_HERE/matches/PASTE_MATCH_ID_HERE/reinstate
+```
+
+#### Cancel a match — admin
+
+From `expired` or `in_progress` only — a `pending` match should be edited instead (participants/referee/reschedule), not cancelled. It will never be played (`start()` already rejects anything but `pending`). Does NOT touch bracket advancement — if this leaves a stage short a winner, fix it by hand.
+
+```bash
+curl -X POST -H "Authorization: Bearer PASTE_ACCESS_TOKEN_HERE" \
+  http://localhost:3000/tournament/events/PASTE_EVENT_ID_HERE/matches/PASTE_MATCH_ID_HERE/cancel
 ```
 
 #### Start match — admin or referee

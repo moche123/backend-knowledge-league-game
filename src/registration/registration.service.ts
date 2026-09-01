@@ -12,6 +12,7 @@ import {
   Tournament,
 } from '../tournament/entities/tournament.entity';
 import { User, UserRole } from '../auth/entities/user.entity';
+import { Match, MatchStatus } from '../match/entities/match.entity';
 
 const PG_UNIQUE_VIOLATION = '23505';
 
@@ -24,6 +25,8 @@ export class RegistrationService {
     private readonly tournamentRepository: Repository<Tournament>,
     @InjectRepository(User)
     private readonly usersRepository: Repository<User>,
+    @InjectRepository(Match)
+    private readonly matchRepository: Repository<Match>,
   ) {}
 
   registerSelf(eventId: string, userId: string): Promise<Registration> {
@@ -63,7 +66,45 @@ export class RegistrationService {
     await this.deleteOrThrow(eventId, userId);
   }
 
+  // Removing a player who's currently slotted into a match: blocked outright
+  // if that match is live (disqualify them from the match instead — see
+  // MatchController.disqualifyPlayer); if it's only pending (not started),
+  // they're cleared from that slot so the admin can pick a replacement via
+  // MatchService.editParticipants. (2026-08-31, explicit user decision.)
   async unregisterByAdmin(eventId: string, userId: string): Promise<void> {
+    const liveMatch = await this.matchRepository
+      .createQueryBuilder('m')
+      .innerJoin('stages', 's', 's.id = m.stage_id')
+      .where('s.event_id = :eventId', { eventId })
+      .andWhere('(m.player_a_id = :userId OR m.player_b_id = :userId)', {
+        userId,
+      })
+      .andWhere('m.status = :status', { status: MatchStatus.IN_PROGRESS })
+      .getExists();
+    if (liveMatch) {
+      throw new ConflictException(
+        'This player is in a live match — disqualify them from the match instead of removing their registration.',
+      );
+    }
+
+    const pendingMatches = await this.matchRepository
+      .createQueryBuilder('m')
+      .innerJoin('stages', 's', 's.id = m.stage_id')
+      .where('s.event_id = :eventId', { eventId })
+      .andWhere('(m.player_a_id = :userId OR m.player_b_id = :userId)', {
+        userId,
+      })
+      .andWhere('m.status = :status', { status: MatchStatus.PENDING })
+      .getMany();
+
+    for (const match of pendingMatches) {
+      if (match.playerAId === userId) match.playerAId = null;
+      if (match.playerBId === userId) match.playerBId = null;
+    }
+    if (pendingMatches.length > 0) {
+      await this.matchRepository.save(pendingMatches);
+    }
+
     await this.deleteOrThrow(eventId, userId);
   }
 

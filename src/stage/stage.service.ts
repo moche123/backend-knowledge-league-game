@@ -113,6 +113,38 @@ export class StageService {
     });
   }
 
+  // Undoes drawFirstStage() entirely (2026-08-31, explicit user request —
+  // there was no way to walk back an in-progress event, e.g. drawn too
+  // early by mistake). Deletes the full stage tree — cascades to matches,
+  // their questions/answers/dispute-chat, and this event's ranking ledger
+  // entries (see schema.sql's ON DELETE CASCADE chains) — and resets the
+  // event to registration_open. Registrations are untouched: same players,
+  // so the event is immediately editable/re-drawable again. Deliberately
+  // scoped to in_progress only — cancelling a finished event is a separate,
+  // bigger decision (real results already counted), don't extend this to
+  // that without the user asking.
+  async cancelBracket(eventId: string): Promise<Tournament> {
+    const event = await this.tournamentRepository.findOne({
+      where: { id: eventId },
+    });
+    if (!event) {
+      throw new NotFoundException(`Event #${eventId} not found`);
+    }
+    if (event.status !== EventStatus.IN_PROGRESS) {
+      throw new ConflictException(
+        `Only an in-progress event can be cancelled (current status: "${event.status}")`,
+      );
+    }
+
+    return this.dataSource.transaction(async (manager) => {
+      await manager.delete(Stage, { eventId });
+      await manager.update(Tournament, eventId, {
+        status: EventStatus.REGISTRATION_OPEN,
+      });
+      return manager.findOneOrFail(Tournament, { where: { id: eventId } });
+    });
+  }
+
   // Called by MatchService whenever a match closes (closed/walkover). If that
   // was the stage's last pending match, draws the next stage(s) with the real
   // winners (and losers, for third_place). Idempotent: if the next stage

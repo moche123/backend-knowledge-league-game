@@ -10,9 +10,8 @@ import { CreateTournamentDto } from './dto/create-tournament.dto';
 import { UpdateTournamentDto } from './dto/update-tournament.dto';
 import { EventStatus, Tournament } from './entities/tournament.entity';
 
-// Postgres error codes we care about here — see CHECK/EXCLUDE/UNIQUE in schema.sql.
+// Postgres error codes we care about here — see CHECK/UNIQUE in schema.sql.
 const PG_CHECK_VIOLATION = '23514';
-const PG_EXCLUSION_VIOLATION = '23P01';
 const PG_UNIQUE_VIOLATION = '23505';
 
 @Injectable()
@@ -70,8 +69,8 @@ export class TournamentService {
     }
   }
 
-  // Translates Postgres constraint violations (power-of-2, dates, and the
-  // referee calendar EXCLUDE) into readable HTTP errors instead of a raw 500.
+  // Translates Postgres constraint violations (power-of-2, dates) into
+  // readable HTTP errors instead of a raw 500.
   private async saveOrThrow(tournament: Tournament): Promise<Tournament> {
     try {
       return await this.tournamentRepository.save(tournament);
@@ -79,11 +78,6 @@ export class TournamentService {
       const code = (error as { code?: string }).code;
       if (code === PG_UNIQUE_VIOLATION) {
         throw new ConflictException('An event with this name already exists');
-      }
-      if (code === PG_EXCLUSION_VIOLATION) {
-        throw new ConflictException(
-          'Referee is already assigned to another event overlapping these dates',
-        );
       }
       if (code === PG_CHECK_VIOLATION) {
         throw new BadRequestException('Tournament violates a data constraint');

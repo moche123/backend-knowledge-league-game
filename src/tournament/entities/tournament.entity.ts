@@ -37,9 +37,6 @@ export class Tournament {
   @Column({ type: 'numeric', name: 'max_score_per_match', default: 100 })
   maxScorePerMatch!: number;
 
-  @Column({ type: 'uuid', name: 'referee_id', nullable: true })
-  refereeId!: string | null;
-
   @Column({
     type: 'enum',
     enum: EventStatus,
