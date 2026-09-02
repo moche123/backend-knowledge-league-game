@@ -19,7 +19,11 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import { AuthService } from './auth.service';
-import { AuthResponseDto, PublicUserDto } from './dto/auth-response.dto';
+import {
+  AuthResponseDto,
+  PublicNameDto,
+  PublicUserDto,
+} from './dto/auth-response.dto';
 import { CreateAuthDto } from './dto/create-auth.dto';
 import { CreateUserByAdminDto } from './dto/create-user-by-admin.dto';
 import { LoginAuthDto } from './dto/login-auth.dto';
@@ -115,6 +119,19 @@ export class AuthController {
   @Get('users/:id')
   getUser(@Param('id') id: string) {
     return this.authService.getPublicUser(id);
+  }
+
+  @ApiOperation({
+    summary: "Get one user's display name (any authenticated user)",
+    description:
+      "id/name only — no email/role/createdAt, unlike GET /auth/users/:id (admin-only). For resolving an opponent/other participant's name from a player-facing page.",
+  })
+  @ApiParam({ name: 'id' })
+  @ApiOkResponse({ type: PublicNameDto })
+  @ApiBearerAuth('access-token')
+  @Get('users/:id/name')
+  getUserName(@Param('id') id: string) {
+    return this.authService.getPublicName(id);
   }
 
   @ApiOperation({ summary: 'Delete a player or referee account (admin)' })

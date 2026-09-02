@@ -48,6 +48,24 @@ export interface CurrentQuestionView {
   opponentAnswered: boolean;
 }
 
+// getAnswers()'s response for the match-result view — the raw Answer plus
+// the question it belongs to (text, not rubric — same "no rubric to
+// players" boundary as getCurrentQuestion, just post-match).
+export interface AnswerWithQuestion extends Answer {
+  questionPosition: number;
+  questionText: string;
+  maxScore: number;
+}
+
+// The match's full question list, no rubric — for the match-result view to
+// show a card for EVERY question (even ones nobody answered), not just the
+// ones with an answer to key off of.
+export interface PublicMatchQuestion {
+  position: number;
+  text: string;
+  maxScore: number;
+}
+
 @Injectable()
 export class MatchService {
   private readonly logger = new Logger(MatchService.name);
@@ -341,6 +359,12 @@ export class MatchService {
     }
 
     match.status = MatchStatus.CANCELLED;
+    // A cancelled match will never be played — the referee assignment is
+    // meaningless once there's nothing left to officiate. Not cleared on a
+    // normal close/reopen (2026-09-01, explicit user decision): cancel is
+    // the one terminal state where the match itself is voided outright, not
+    // just its current attempt.
+    match.refereeId = null;
     return this.matchRepository.save(match);
   }
 
@@ -589,8 +613,15 @@ export class MatchService {
     if (match.status !== MatchStatus.IN_PROGRESS) {
       throw new ConflictException('Match is not in progress');
     }
-    if (!match.currentQuestionPosition) {
-      throw new ConflictException('Match has no active question right now');
+    // Same guard as submitAnswer() — currentQuestionPosition alone isn't
+    // enough; without a deadline too there's nothing real to hand back
+    // (shouldn't happen via any normal code path, but has shown up from
+    // manual DB edits during testing — better a clear error than a question
+    // with a nonsensical always-zero countdown).
+    if (!match.currentQuestionPosition || !match.currentQuestionDeadline) {
+      throw new ConflictException(
+        'Match has no active question right now — its state is inconsistent, an admin should end and reopen it',
+      );
     }
 
     const matchQuestion = await this.matchQuestionRepository.findOne({
@@ -638,7 +669,7 @@ export class MatchService {
     eventId: string,
     matchId: string,
     requester: AuthenticatedUser,
-  ): Promise<Answer[]> {
+  ): Promise<AnswerWithQuestion[]> {
     const match = await this.getMatchOrThrow(eventId, matchId);
     const isParticipant =
       requester.id === match.playerAId || requester.id === match.playerBId;
@@ -658,10 +689,73 @@ export class MatchService {
       );
     }
 
-    return this.answerRepository.find({
-      where: { matchId: match.id },
-      order: { submittedAt: 'ASC' },
+    const [answers, questions] = await Promise.all([
+      this.answerRepository.find({
+        where: { matchId: match.id },
+        order: { submittedAt: 'ASC' },
+      }),
+      this.matchQuestionRepository.find({ where: { matchId: match.id } }),
+    ]);
+    const questionById = new Map(
+      questions.map((question) => [question.id, question]),
+    );
+    return answers.map((answer) => {
+      const question = questionById.get(answer.questionId);
+      return {
+        ...answer,
+        // pg/TypeORM return `numeric` columns as strings (precision safety)
+        // — left as-is, `answer.aiScore === question.maxScore` comparisons
+        // (e.g. deciding "correct" for the match-result view's color) would
+        // always be false ("20.93" !== 20.93), no matter the real value.
+        aiScore: answer.aiScore === null ? null : Number(answer.aiScore),
+        adminOverrideScore:
+          answer.adminOverrideScore === null
+            ? null
+            : Number(answer.adminOverrideScore),
+        questionPosition: question?.position ?? 0,
+        questionText: question?.text ?? '',
+        maxScore: question ? Number(question.maxScore) : 0,
+      };
     });
+  }
+
+  // Same participant/staff + closed/walkover gate as getAnswers() — but the
+  // full question list (no rubric), not just the ones someone answered. So
+  // the match-result view can show a card for every question, including
+  // ones nobody got to answer in time.
+  async getPublicQuestions(
+    eventId: string,
+    matchId: string,
+    requester: AuthenticatedUser,
+  ): Promise<PublicMatchQuestion[]> {
+    const match = await this.getMatchOrThrow(eventId, matchId);
+    const isParticipant =
+      requester.id === match.playerAId || requester.id === match.playerBId;
+    const isStaff =
+      requester.role === UserRole.ADMIN || requester.role === UserRole.REFEREE;
+    if (!isParticipant && !isStaff) {
+      throw new ForbiddenException('Not a participant of this match');
+    }
+    if (
+      isParticipant &&
+      !isStaff &&
+      match.status !== MatchStatus.CLOSED &&
+      match.status !== MatchStatus.WALKOVER
+    ) {
+      throw new ConflictException(
+        'Questions are visible once the match is closed',
+      );
+    }
+
+    const questions = await this.matchQuestionRepository.find({
+      where: { matchId: match.id },
+      order: { position: 'ASC' },
+    });
+    return questions.map((question) => ({
+      position: question.position,
+      text: question.text,
+      maxScore: Number(question.maxScore),
+    }));
   }
 
   // Admin/referee see one match's full question set (with rubric) —

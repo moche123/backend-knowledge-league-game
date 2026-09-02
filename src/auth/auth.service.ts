@@ -13,7 +13,11 @@ import { Repository } from 'typeorm';
 import { CreateAuthDto } from './dto/create-auth.dto';
 import { CreateUserByAdminDto } from './dto/create-user-by-admin.dto';
 import { LoginAuthDto } from './dto/login-auth.dto';
-import { AuthResponseDto, PublicUserDto } from './dto/auth-response.dto';
+import {
+  AuthResponseDto,
+  PublicNameDto,
+  PublicUserDto,
+} from './dto/auth-response.dto';
 import { User, UserRole } from './entities/user.entity';
 import { JwtPayload } from './strategies/jwt.strategy';
 
@@ -196,6 +200,21 @@ export class AuthService {
       role: user.role,
       createdAt: user.createdAt,
     };
+  }
+
+  // Any authenticated user (not admin-only) — id/name only, selected
+  // directly so email/role never even get fetched. For resolving an
+  // opponent's or another participant's display name from a player-facing
+  // page (match-result-page, my-matches-page).
+  async getPublicName(userId: string): Promise<PublicNameDto> {
+    const user = await this.usersRepository.findOne({
+      where: { id: userId },
+      select: { id: true, name: true },
+    });
+    if (!user) {
+      throw new NotFoundException(`User #${userId} not found`);
+    }
+    return { id: user.id, name: user.name };
   }
 
   // Admin-only. Never deletes an admin account (those aren't managed through

@@ -43,6 +43,7 @@ import { MatchService } from './match.service';
 // GET    /tournament/events/:eventId/matches/:matchId/current-question — player (only the match's 2)
 // POST   /tournament/events/:eventId/matches/:matchId/answers          — player (only the match's 2)
 // GET    /tournament/events/:eventId/matches/:matchId/answers          — participants (only after closing) or admin/referee
+// GET    /tournament/events/:eventId/matches/:matchId/questions-public — participants (only after closing) or admin/referee, full question list, no rubric
 // GET    /tournament/events/:eventId/matches/:matchId/questions        — admin/referee, full question set (with rubric)
 // POST   /tournament/events/:eventId/matches/:matchId/questions        — admin, add one question, pre-match only, must fit the score budget
 // GET    /tournament/events/:eventId/matches/:matchId/questions/:id    — admin/referee
@@ -155,7 +156,7 @@ export class MatchController {
   @ApiOperation({
     summary: 'Cancel a match (admin)',
     description:
-      'It will never be played — start() rejects anything but "pending". Allowed from "expired" or "in_progress" only — a "pending" match should be edited instead (participants/referee/reschedule), not cancelled. Never once it\'s already terminal (closed/walkover/cancelled). Does NOT touch bracket advancement — if this leaves a stage short a winner, fix it by hand.',
+      'It will never be played — start() rejects anything but "pending". Allowed from "expired" or "in_progress" only — a "pending" match should be edited instead (participants/referee/reschedule), not cancelled. Never once it\'s already terminal (closed/walkover/cancelled). Clears refereeId (nothing left to officiate). Does NOT touch bracket advancement — if this leaves a stage short a winner, fix it by hand.',
   })
   @ApiParam({ name: 'matchId' })
   @Roles(UserRole.ADMIN)
@@ -193,7 +194,7 @@ export class MatchController {
   @ApiOperation({
     summary: "Get the active question (player, one of the match's two)",
     description:
-      'Returns the active question and its deadline, without the rubric.',
+      'Returns the active question and its deadline, without the rubric. Rejects with 409 if the match has no active deadline even with a position set — an inconsistent state that should never happen via normal use (has shown up from manual DB edits during testing); an admin should end() then reopen() it.',
   })
   @ApiParam({ name: 'matchId' })
   @Roles(UserRole.PLAYER)
@@ -225,7 +226,7 @@ export class MatchController {
   @ApiOperation({
     summary: 'Get all answers for a match',
     description:
-      'Players see this only after the match closes; admin/referee any time. Includes ai_score/ai_justification, scored as soon as each question closes.',
+      'Players see this only after the match closes; admin/referee any time. Includes ai_score/ai_justification (scored as soon as each question closes) plus the question it belongs to (position/text, not the rubric — same boundary as current-question, just post-match) for building a match-result view in one call.',
   })
   @ApiParam({ name: 'matchId' })
   @Get(':matchId/answers')
@@ -235,6 +236,21 @@ export class MatchController {
     @CurrentUser() user: AuthenticatedUser,
   ) {
     return this.matchService.getAnswers(eventId, matchId, user);
+  }
+
+  @ApiOperation({
+    summary: "List the match's full question set, no rubric",
+    description:
+      'Same access rule as GET .../answers (players once closed, staff any time) — the full list (position/text/maxScore), not just the ones someone answered, so a match-result view can show a card for every question.',
+  })
+  @ApiParam({ name: 'matchId' })
+  @Get(':matchId/questions-public')
+  getPublicQuestions(
+    @Param('eventId') eventId: string,
+    @Param('matchId') matchId: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.matchService.getPublicQuestions(eventId, matchId, user);
   }
 
   @ApiOperation({

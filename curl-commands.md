@@ -53,6 +53,15 @@ curl -X POST -H "Authorization: Bearer PASTE_ACCESS_TOKEN_HERE" \
   http://localhost:3000/auth/logout
 ```
 
+#### Get a user's display name — any authenticated user
+
+`{id, name}` only, no email/role/createdAt (that fuller profile, `GET /auth/users/:id`, is admin-only). For resolving an opponent/other participant's name from a player-facing page.
+
+```bash
+curl -H "Authorization: Bearer PASTE_ACCESS_TOKEN_HERE" \
+  http://localhost:3000/auth/users/PASTE_USER_ID_HERE/name
+```
+
 ## Tournament
 
 #### Create event — admin
@@ -241,7 +250,7 @@ curl -X POST -H "Authorization: Bearer PASTE_ACCESS_TOKEN_HERE" \
 
 #### Cancel a match — admin
 
-From `expired` or `in_progress` only — a `pending` match should be edited instead (participants/referee/reschedule), not cancelled. It will never be played (`start()` already rejects anything but `pending`). Does NOT touch bracket advancement — if this leaves a stage short a winner, fix it by hand.
+From `expired` or `in_progress` only — a `pending` match should be edited instead (participants/referee/reschedule), not cancelled. It will never be played (`start()` already rejects anything but `pending`). Clears `referee_id` (nothing left to officiate). Does NOT touch bracket advancement — if this leaves a stage short a winner, fix it by hand.
 
 ```bash
 curl -X POST -H "Authorization: Bearer PASTE_ACCESS_TOKEN_HERE" \
@@ -259,7 +268,7 @@ curl -X POST -H "Authorization: Bearer PASTE_ACCESS_TOKEN_HERE" \
 
 #### End match — admin or referee
 
-Can close it earlier than estimated.
+Can close it earlier than estimated. Also the only way (via UI now — a "End match" button, 2026-09-01) to unstick a match stuck in a bad `in_progress` state (e.g. `current_question_deadline` null despite a position set) — end it, then `reopen()` to replay properly.
 
 ```bash
 curl -X POST -H "Authorization: Bearer PASTE_ACCESS_TOKEN_HERE" \
@@ -268,7 +277,7 @@ curl -X POST -H "Authorization: Bearer PASTE_ACCESS_TOKEN_HERE" \
 
 #### Get current question — player, only the match's 2
 
-Active question + deadline, without the rubric.
+Active question + deadline, without the rubric. Rejects with 409 if there's no active deadline even with a position set (inconsistent state — shouldn't happen normally, admin should end() + reopen()).
 
 ```bash
 curl -H "Authorization: Bearer PASTE_ACCESS_TOKEN_HERE" \
@@ -288,11 +297,20 @@ curl -X POST -H "Content-Type: application/json" \
 
 #### Get answers
 
-Participants only after the match closes; admin/referee any time. Includes `ai_score`/`ai_justification`, evaluated by AI (Moonshot) as soon as each question is left behind.
+Participants only after the match closes; admin/referee any time. Includes `ai_score`/`ai_justification` (evaluated as soon as each question is left behind — currently MOCKED: random correct/incorrect, no real AI call, see `MatchScoringService.callAi` in `match-scoring.service.ts`) plus `questionPosition`/`questionText`/`maxScore` for the question each answer belongs to (no rubric — same boundary as current-question) — enough in one call to build a match-result view.
 
 ```bash
 curl -H "Authorization: Bearer PASTE_ACCESS_TOKEN_HERE" \
   http://localhost:3000/tournament/events/PASTE_EVENT_ID_HERE/matches/PASTE_MATCH_ID_HERE/answers
+```
+
+#### Get the full question list, no rubric
+
+Same access rule as "Get answers" above — but ALL of the match's questions (position/text/maxScore), including ones nobody answered. For a match-result view to show a card for every question, not just the answered ones.
+
+```bash
+curl -H "Authorization: Bearer PASTE_ACCESS_TOKEN_HERE" \
+  http://localhost:3000/tournament/events/PASTE_EVENT_ID_HERE/matches/PASTE_MATCH_ID_HERE/questions-public
 ```
 
 #### List match questions — admin or referee

@@ -2,8 +2,12 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import OpenAI from 'openai';
-import { z } from 'zod';
+// MOCKED (2026-09-01) — real callAi() below is commented out along with it;
+// uncomment `OpenAI` and `z` here (and `EvaluationSchema`/`EVALUATION_JSON_SCHEMA`/
+// `MOONSHOT_BASE_URL`/`MOONSHOT_MODEL` below) along with it to restore.
+// import OpenAI from 'openai';
+// import { z } from 'zod';
+import { delay, firstValueFrom, of } from 'rxjs';
 import {
   computeQuality,
   computeResult,
@@ -14,41 +18,48 @@ import { MatchQuestion } from './entities/match-question.entity';
 import { Match, MatchStatus } from './entities/match.entity';
 
 const WALKOVER_PENALTY = 50;
+const MOCK_EVALUATION_DELAY_MS = 1500;
 
-const EvaluationSchema = z.object({
-  evaluations: z.array(
-    z.object({
-      answerIndex: z.number().int(),
-      score: z.number(),
-      justification: z.string(),
-    }),
-  ),
-});
+interface Evaluation {
+  answerIndex: number;
+  score: number;
+  justification: string;
+}
 
-const EVALUATION_JSON_SCHEMA = {
-  type: 'object',
-  properties: {
-    evaluations: {
-      type: 'array',
-      items: {
-        type: 'object',
-        properties: {
-          answerIndex: { type: 'integer' },
-          score: { type: 'number' },
-          justification: { type: 'string' },
-        },
-        required: ['answerIndex', 'score', 'justification'],
-        additionalProperties: false,
-      },
-    },
-  },
-  required: ['evaluations'],
-  additionalProperties: false,
-} as const;
-
-// Same provider as question generation (Moonshot/Kimi, user's decision for the MVP).
-const MOONSHOT_BASE_URL = 'https://api.moonshot.ai/v1';
-const MOONSHOT_MODEL = 'kimi-k2.6';
+// const EvaluationSchema = z.object({
+//   evaluations: z.array(
+//     z.object({
+//       answerIndex: z.number().int(),
+//       score: z.number(),
+//       justification: z.string(),
+//     }),
+//   ),
+// });
+//
+// const EVALUATION_JSON_SCHEMA = {
+//   type: 'object',
+//   properties: {
+//     evaluations: {
+//       type: 'array',
+//       items: {
+//         type: 'object',
+//         properties: {
+//           answerIndex: { type: 'integer' },
+//           score: { type: 'number' },
+//           justification: { type: 'string' },
+//         },
+//         required: ['answerIndex', 'score', 'justification'],
+//         additionalProperties: false,
+//       },
+//     },
+//   },
+//   required: ['evaluations'],
+//   additionalProperties: false,
+// } as const;
+//
+// // Same provider as question generation (Moonshot/Kimi, user's decision for the MVP).
+// const MOONSHOT_BASE_URL = 'https://api.moonshot.ai/v1';
+// const MOONSHOT_MODEL = 'kimi-k2.6';
 
 @Injectable()
 export class MatchScoringService {
@@ -72,7 +83,7 @@ export class MatchScoringService {
     });
     if (answers.length === 0) return;
 
-    let evaluations: z.infer<typeof EvaluationSchema>['evaluations'];
+    let evaluations: Evaluation[];
     try {
       evaluations = await this.callAi(matchQuestion, answers);
     } catch (error) {
@@ -220,54 +231,80 @@ export class MatchScoringService {
     }, 0);
   }
 
+  // MOCKED (2026-09-01, explicit user request) — random correct/incorrect
+  // per answer, no rubric comparison, full maxScore if "correct" else 0,
+  // generic fixed justification text (matches what the match-result page
+  // shows). So the answer-question -> match-result flow can be built and
+  // tested end-to-end without depending on Moonshot. Real implementation
+  // below, commented out — uncomment and delete this block to restore it.
   private async callAi(
     matchQuestion: MatchQuestion,
     answers: Answer[],
-  ): Promise<z.infer<typeof EvaluationSchema>['evaluations']> {
-    const apiKey = this.configService.getOrThrow<string>('MOONSHOT_API_KEY');
-    const client = new OpenAI({ apiKey, baseURL: MOONSHOT_BASE_URL });
-
-    const answersBlock = answers
-      .map(
-        (answer, index) =>
-          `Answer ${index} (player ${index}): """${answer.answerText}"""`,
-      )
-      .join('\n\n');
-
-    const response = await client.chat.completions.create({
-      model: MOONSHOT_MODEL,
-      messages: [
-        {
-          role: 'system',
-          content:
-            'You are the evaluator for a knockout knowledge tournament. You grade ' +
-            'free-text answers against a rubric, with strict, consistent criteria across ' +
-            'players — both answers to the same question are evaluated together, in this ' +
-            "same call, so the criteria doesn't vary between them. The score ranges from 0 " +
-            "to the question's maximum score. Always justify in English, citing which rubric " +
-            "points each answer did or didn't meet.",
-        },
-        {
-          role: 'user',
-          content:
-            `Question: ${matchQuestion.text}\n` +
-            `Rubric / expected answer: ${matchQuestion.rubric}\n` +
-            `Max score: ${matchQuestion.maxScore}\n\n${answersBlock}\n\n` +
-            `Evaluate each answer (answerIndex 0${answers.length > 1 ? ' and 1' : ''}) with its score and justification.`,
-        },
-      ],
-      response_format: {
-        type: 'json_schema',
-        json_schema: { name: 'evaluations', schema: EVALUATION_JSON_SCHEMA },
-      },
+  ): Promise<Evaluation[]> {
+    const evaluations = answers.map((_, answerIndex) => {
+      const correct = Math.random() < 0.5;
+      return {
+        answerIndex,
+        score: correct ? Number(matchQuestion.maxScore) : 0,
+        justification: correct ? 'Bien contestada.' : 'Mal contestada.',
+      };
     });
-
-    const content = response.choices[0]?.message?.content;
-    if (!content) {
-      throw new Error('AI evaluation returned empty content');
-    }
-    return EvaluationSchema.parse(JSON.parse(content)).evaluations;
+    // Simulates evaluation latency (same reasoning as the question-generation
+    // mock, see match-question-generation.service.ts) — shorter here since
+    // this fires once per question instead of once per schedule.
+    return firstValueFrom(
+      of(evaluations).pipe(delay(MOCK_EVALUATION_DELAY_MS)),
+    );
   }
+
+  // private async callAi(
+  //   matchQuestion: MatchQuestion,
+  //   answers: Answer[],
+  // ): Promise<z.infer<typeof EvaluationSchema>['evaluations']> {
+  //   const apiKey = this.configService.getOrThrow<string>('MOONSHOT_API_KEY');
+  //   const client = new OpenAI({ apiKey, baseURL: MOONSHOT_BASE_URL });
+  //
+  //   const answersBlock = answers
+  //     .map(
+  //       (answer, index) =>
+  //         `Answer ${index} (player ${index}): """${answer.answerText}"""`,
+  //     )
+  //     .join('\n\n');
+  //
+  //   const response = await client.chat.completions.create({
+  //     model: MOONSHOT_MODEL,
+  //     messages: [
+  //       {
+  //         role: 'system',
+  //         content:
+  //           'You are the evaluator for a knockout knowledge tournament. You grade ' +
+  //           'free-text answers against a rubric, with strict, consistent criteria across ' +
+  //           'players — both answers to the same question are evaluated together, in this ' +
+  //           "same call, so the criteria doesn't vary between them. The score ranges from 0 " +
+  //           "to the question's maximum score. Always justify in English, citing which rubric " +
+  //           "points each answer did or didn't meet.",
+  //       },
+  //       {
+  //         role: 'user',
+  //         content:
+  //           `Question: ${matchQuestion.text}\n` +
+  //           `Rubric / expected answer: ${matchQuestion.rubric}\n` +
+  //           `Max score: ${matchQuestion.maxScore}\n\n${answersBlock}\n\n` +
+  //           `Evaluate each answer (answerIndex 0${answers.length > 1 ? ' and 1' : ''}) with its score and justification.`,
+  //       },
+  //     ],
+  //     response_format: {
+  //       type: 'json_schema',
+  //       json_schema: { name: 'evaluations', schema: EVALUATION_JSON_SCHEMA },
+  //     },
+  //   });
+  //
+  //   const content = response.choices[0]?.message?.content;
+  //   if (!content) {
+  //     throw new Error('AI evaluation returned empty content');
+  //   }
+  //   return EvaluationSchema.parse(JSON.parse(content)).evaluations;
+  // }
 }
 
 function clamp(value: number, min: number, max: number): number {
