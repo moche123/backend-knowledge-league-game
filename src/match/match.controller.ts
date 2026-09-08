@@ -21,6 +21,7 @@ import { Roles } from '../auth/decorators/roles.decorator';
 import { UserRole } from '../auth/entities/user.entity';
 import type { AuthenticatedUser } from '../auth/strategies/jwt.strategy';
 import { CreateMatchQuestionDto } from './dto/create-match-question.dto';
+import { DeclareWinnerDto } from './dto/declare-winner.dto';
 import { DisqualifyPlayerDto } from './dto/disqualify-player.dto';
 import { EditParticipantsDto } from './dto/edit-participants.dto';
 import { OverrideAnswerScoreDto } from './dto/override-answer-score.dto';
@@ -50,6 +51,7 @@ import { MatchService } from './match.service';
 // PATCH  /tournament/events/:eventId/matches/:matchId/questions/:id    — admin, content/score correction, pre-match only
 // DELETE /tournament/events/:eventId/matches/:matchId/questions/:id    — admin, remove one question, pre-match only, keeps at least one
 // PATCH  /tournament/events/:eventId/matches/:matchId/answers/:answerId/override — admin, Fase 10, post-match only
+// POST   /tournament/events/:eventId/matches/:matchId/declare-winner            — admin or the match's own referee, closed/walkover only, dispute resolution
 // POST   /tournament/events/:eventId/matches/:matchId/reopen                    — admin, Fase 10, repeats the match from scratch
 @ApiTags('matches')
 @ApiBearerAuth('access-token')
@@ -356,6 +358,23 @@ export class MatchController {
       user.id,
       dto,
     );
+  }
+
+  @ApiOperation({
+    summary: "Overturn a closed/walkover match's winner (dispute resolution)",
+    description:
+      "Admin, or the match's own assigned referee. Only changes winnerId — scoreA/scoreB stay as the AI's assessment. Logs a system message in the match's dispute chat. Same documented limitation as overrideAnswerScore/reopen: doesn't propagate to bracket stages already drawn from the old winner.",
+  })
+  @ApiParam({ name: 'matchId' })
+  @Roles(UserRole.ADMIN, UserRole.REFEREE)
+  @Post(':matchId/declare-winner')
+  declareWinner(
+    @Param('eventId') eventId: string,
+    @Param('matchId') matchId: string,
+    @CurrentUser() user: AuthenticatedUser,
+    @Body() dto: DeclareWinnerDto,
+  ) {
+    return this.matchService.declareWinner(eventId, matchId, user, dto);
   }
 
   @ApiOperation({

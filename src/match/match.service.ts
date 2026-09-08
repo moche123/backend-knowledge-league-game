@@ -10,6 +10,7 @@ import { Cron, CronExpression } from '@nestjs/schedule';
 import { InjectRepository } from '@nestjs/typeorm';
 import { LessThan, Repository } from 'typeorm';
 import { CreateMatchQuestionDto } from './dto/create-match-question.dto';
+import { DeclareWinnerDto } from './dto/declare-winner.dto';
 import { DisqualifyPlayerDto } from './dto/disqualify-player.dto';
 import { EditParticipantsDto } from './dto/edit-participants.dto';
 import { OverrideAnswerScoreDto } from './dto/override-answer-score.dto';
@@ -417,6 +418,66 @@ export class MatchService {
     }
 
     return answer;
+  }
+
+  // Dispute resolution — admin overturns who won a closed/walkover match,
+  // based on what was discussed in the dispute chat. Coarser than
+  // overrideAnswerScore (whole match, not one answer) and deliberately
+  // leaves scoreA/scoreB untouched — those stay the AI's assessment, this
+  // is a human judgment call layered on top, same as an admin overriding a
+  // referee's call in a real tournament. Ranking points were already
+  // recorded from scoreA/scoreB when the match closed and aren't affected
+  // by this — only the winner of record (and, downstream, whichever
+  // already-drawn bracket stage a human notices needs a manual fix, same
+  // documented limitation as overrideAnswerScore/reopen).
+  async declareWinner(
+    eventId: string,
+    matchId: string,
+    requester: AuthenticatedUser,
+    dto: DeclareWinnerDto,
+  ): Promise<Match> {
+    const match = await this.getMatchOrThrow(eventId, matchId);
+    // Referees may only resolve disputes on matches they were actually
+    // assigned to (mirrors DisputeChatService's per-match role check) —
+    // admin is unrestricted, same as everywhere else in this module.
+    if (
+      requester.role === UserRole.REFEREE &&
+      match.refereeId !== requester.id
+    ) {
+      throw new ForbiddenException(
+        "Only this match's assigned referee (or admin) can resolve its disputes",
+      );
+    }
+    if (
+      match.status !== MatchStatus.CLOSED &&
+      match.status !== MatchStatus.WALKOVER
+    ) {
+      throw new ConflictException(
+        `Cannot declare a winner for a match with status "${match.status}"`,
+      );
+    }
+    if (dto.winnerId !== match.playerAId && dto.winnerId !== match.playerBId) {
+      throw new BadRequestException(
+        "winnerId must be one of this match's two players",
+      );
+    }
+
+    match.winnerId = dto.winnerId;
+    const saved = await this.matchRepository.save(match);
+
+    const winner = await this.userRepository.findOne({
+      where: { id: dto.winnerId },
+    });
+    await this.chatMessageRepository.save(
+      this.chatMessageRepository.create({
+        matchId: match.id,
+        questionId: null,
+        authorId: requester.id,
+        text: `[System] Winner overturned to ${winner?.name ?? dto.winnerId} following dispute resolution.`,
+      }),
+    );
+
+    return saved;
   }
 
   // Fase 10 — repeats a closed match from scratch (e.g. plagiarism detected

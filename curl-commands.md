@@ -398,6 +398,17 @@ curl -X PATCH -H "Content-Type: application/json" \
   http://localhost:3000/tournament/events/PASTE_EVENT_ID_HERE/matches/PASTE_MATCH_ID_HERE/answers/PASTE_ANSWER_ID_HERE/override
 ```
 
+#### Declare winner (dispute resolution) — admin or the match's own referee
+
+Only on a `closed`/`walkover` match. Overturns `winnerId` — `scoreA`/`scoreB` are left untouched (still the AI's assessment). Logs a `[System]` message in the match's dispute chat. A referee can only call this on a match they're assigned to (`matches.referee_id`); admin is unrestricted.
+
+```bash
+curl -X POST -H "Content-Type: application/json" \
+  -H "Authorization: Bearer PASTE_ACCESS_TOKEN_HERE" \
+  -d '{"winnerId":"PASTE_PLAYER_ID_HERE"}' \
+  http://localhost:3000/tournament/events/PASTE_EVENT_ID_HERE/matches/PASTE_MATCH_ID_HERE/declare-winner
+```
+
 #### Reopen match — admin
 
 Repeats the match from scratch (e.g. plagiarism detected post-match): goes back to `pending`, clears answers/questions/score/ranking for that match. Rejects with 409 if the match has a disqualified player (`matches.disqualified_player_id` set) — disqualification is final for this event, this endpoint can't bring that player back either.
