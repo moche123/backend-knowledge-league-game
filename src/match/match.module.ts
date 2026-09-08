@@ -14,9 +14,11 @@ import { MatchController } from './match.controller';
 import { MatchQuestionGenerationService } from './match-question-generation.service';
 import { MatchScoringService } from './match-scoring.service';
 import { MatchService } from './match.service';
+import { RealtimeModule } from '../realtime/realtime.module';
 
 @Module({
   imports: [
+    RealtimeModule,
     TypeOrmModule.forFeature([
       Match,
       Stage,

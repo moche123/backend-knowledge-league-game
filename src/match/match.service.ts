@@ -32,6 +32,7 @@ import { Tournament } from '../tournament/entities/tournament.entity';
 import { DisputeChatMessage } from '../dispute-chat/entities/dispute-chat-message.entity';
 import { User, UserRole } from '../auth/entities/user.entity';
 import type { AuthenticatedUser } from '../auth/strategies/jwt.strategy';
+import { RealtimeService } from '../realtime/realtime.service';
 
 const PG_UNIQUE_VIOLATION = '23505';
 
@@ -92,6 +93,7 @@ export class MatchService {
     private readonly matchScoringService: MatchScoringService,
     private readonly stageService: StageService,
     private readonly rankingService: RankingService,
+    private readonly realtimeService: RealtimeService,
   ) {}
 
   async findOne(eventId: string, matchId: string): Promise<Match> {
@@ -158,7 +160,9 @@ export class MatchService {
     match.scheduledStartAt = scheduledStartAt;
     match.scheduledEndAt = scheduledEndAt;
     match.status = MatchStatus.PENDING;
-    return this.matchRepository.save(match);
+    const saved = await this.matchRepository.save(match);
+    this.publishBattleState(eventId, saved);
+    return saved;
   }
 
   // Admin assigns/changes the match referee — manual only, no auto-pick, no
@@ -185,7 +189,9 @@ export class MatchService {
     }
 
     match.refereeId = dto.refereeId;
-    return this.matchRepository.save(match);
+    const saved = await this.matchRepository.save(match);
+    this.publishBattleState(eventId, saved);
+    return saved;
   }
 
   // Admin changes one or both participants — only before the match starts
@@ -289,6 +295,7 @@ export class MatchService {
       }),
     );
 
+    this.publishBattleState(eventId, match);
     return saved;
   }
 
@@ -366,7 +373,9 @@ export class MatchService {
     // the one terminal state where the match itself is voided outright, not
     // just its current attempt.
     match.refereeId = null;
-    return this.matchRepository.save(match);
+    const saved = await this.matchRepository.save(match);
+    this.publishBattleState(eventId, saved);
+    return saved;
   }
 
   // Fase 10 — admin corrects one answer's AI score, based on what was
@@ -590,7 +599,9 @@ export class MatchService {
     match.currentQuestionDeadline = new Date(
       Date.now() + firstQuestion.timeLimit * 1000,
     );
-    return this.matchRepository.save(match);
+    const saved = await this.matchRepository.save(match);
+    this.publishBattleState(eventId, saved);
+    return saved;
   }
 
   // Admin or referee — can close it earlier than estimated if it finished
@@ -660,6 +671,7 @@ export class MatchService {
       await this.advanceQuestion(match);
     }
 
+    this.publishBattleState(eventId, match);
     return saved;
   }
 
@@ -1033,6 +1045,23 @@ export class MatchService {
     }
   }
 
+  private publishBattleState(eventId: string, match: Match): void {
+    this.realtimeService.publish({
+      type: 'battle.state',
+      eventId,
+      matchId: match.id,
+      payload: {
+        matchId: match.id,
+        status: match.status,
+        currentQuestionPosition: match.currentQuestionPosition,
+        currentQuestionDeadline: match.currentQuestionDeadline,
+        scoreA: match.scoreA,
+        scoreB: match.scoreB,
+        winnerId: match.winnerId,
+      },
+    });
+  }
+
   private async evaluateCurrentQuestion(match: Match): Promise<void> {
     if (!match.currentQuestionPosition) return;
     const currentMatchQuestion = await this.matchQuestionRepository.findOne({
@@ -1068,7 +1097,9 @@ export class MatchService {
     match.currentQuestionDeadline = new Date(
       Date.now() + nextMatchQuestion.timeLimit * 1000,
     );
-    return this.matchRepository.save(match);
+    const saved = await this.matchRepository.save(match);
+    await this.publishBattleStateForMatch(saved);
+    return saved;
   }
 
   // Walkover if exactly one of the two answered NONE of the match's
@@ -1122,7 +1153,15 @@ export class MatchService {
       );
     });
 
+    await this.publishBattleStateForMatch(saved);
     return saved;
+  }
+
+  private async publishBattleStateForMatch(match: Match): Promise<void> {
+    const stage = await this.stageRepository.findOne({
+      where: { id: match.stageId },
+    });
+    if (stage) this.publishBattleState(stage.eventId, match);
   }
 
   private async getMatchOrThrow(

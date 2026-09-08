@@ -13,6 +13,7 @@ import { MatchQuestion } from '../match/entities/match-question.entity';
 import { Stage } from '../stage/entities/stage.entity';
 import { UserRole } from '../auth/entities/user.entity';
 import type { AuthenticatedUser } from '../auth/strategies/jwt.strategy';
+import { RealtimeService } from '../realtime/realtime.service';
 
 // In-match dispute chat — the match's players, its assigned referee (auto-
 // picked when the match was scheduled, or overridden by admin — see
@@ -30,6 +31,7 @@ export class DisputeChatService {
     private readonly stageRepository: Repository<Stage>,
     @InjectRepository(MatchQuestion)
     private readonly matchQuestionRepository: Repository<MatchQuestion>,
+    private readonly realtimeService: RealtimeService,
   ) {}
 
   async sendMessage(
@@ -57,7 +59,22 @@ export class DisputeChatService {
       authorId: requester.id,
       text: dto.text,
     });
-    return this.messageRepository.save(message);
+    const saved = await this.messageRepository.save(message);
+    this.realtimeService.publish({
+      type: 'chat.message',
+      eventId,
+      matchId,
+      payload: saved,
+    });
+    return saved;
+  }
+
+  async authorizeMatchAccess(
+    eventId: string,
+    matchId: string,
+    requester: AuthenticatedUser,
+  ): Promise<void> {
+    await this.getMatchOrThrow(eventId, matchId, requester);
   }
 
   async listMessages(
