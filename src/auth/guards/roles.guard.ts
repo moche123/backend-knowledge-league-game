@@ -15,6 +15,10 @@ export class RolesGuard implements CanActivate {
   constructor(private readonly reflector: Reflector) {}
 
   canActivate(context: ExecutionContext): boolean {
+    // WebSocket authorization is performed by the gateway after validating
+    // the handshake token and checking access to the requested match.
+    if (context.getType() === 'ws') return true;
+
     const roles = this.reflector.getAllAndOverride<UserRole[]>(ROLES_KEY, [
       context.getHandler(),
       context.getClass(),

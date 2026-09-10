@@ -11,6 +11,11 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
   // context: ExecutionContext — generic representation of the current request (HTTP, WebSocket, RPC — here it's HTTP).
   //  Gives access to the method and class that will handle this request.
   canActivate(context: ExecutionContext) {
+    // Socket.IO authenticates during the gateway connection handshake. The
+    // global HTTP passport guard cannot read an Express request from a WS
+    // context, and would otherwise dereference an undefined request.
+    if (context.getType() === 'ws') return true;
+
     const isPublic = this.reflector.getAllAndOverride<boolean>(IS_PUBLIC_KEY, [
       // context.getHandler() — the specific controller method matching the route (e.g. login, register).
       context.getHandler(),
