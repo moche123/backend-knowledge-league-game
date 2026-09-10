@@ -21,6 +21,20 @@ export class DisputeChatController {
   constructor(private readonly disputeChatService: DisputeChatService) {}
 
   @ApiOperation({
+    summary: 'Write message live (for typing indicator)',
+    description:
+      "Execute user's typing indicator. Participants: the match's two players, the event's referee, or admin. Stays open after the match closes.",
+  })
+  @Post()
+  writeMessageLive(
+    @Param('eventId') eventId: string,
+    @Param('matchId') matchId: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.disputeChatService.writeMessageLive(eventId, matchId, user);
+  }
+
+  @ApiOperation({
     summary: 'Send a chat message',
     description:
       "Participants: the match's two players, the event's referee, or admin. Stays open after the match closes. questionId is optional, for a dispute about one specific question.",

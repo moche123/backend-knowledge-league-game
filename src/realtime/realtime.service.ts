@@ -3,10 +3,16 @@ import { Subject } from 'rxjs';
 
 export type RealtimeEvent =
   | {
-      type: 'chat.message';
+      type: 'chat:message';
       eventId: string;
       matchId: string;
       payload: unknown;
+    }
+  | {
+      type: 'chat:typing';
+      eventId: string;
+      matchId: string;
+      payload: { authorId: string };
     }
   | {
       type: 'battle.state';

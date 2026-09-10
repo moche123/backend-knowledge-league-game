@@ -61,12 +61,27 @@ export class DisputeChatService {
     });
     const saved = await this.messageRepository.save(message);
     this.realtimeService.publish({
-      type: 'chat.message',
+      type: 'chat:message',
       eventId,
       matchId,
       payload: saved,
     });
     return saved;
+  }
+
+  //Example: George is writting.....
+  async writeMessageLive(
+    eventId: string,
+    matchId: string,
+    requester: AuthenticatedUser,
+  ): Promise<void> {
+    await this.getMatchOrThrow(eventId, matchId, requester);
+    this.realtimeService.publish({
+      type: 'chat:typing',
+      eventId,
+      matchId,
+      payload: { authorId: requester.id },
+    });
   }
 
   async authorizeMatchAccess(

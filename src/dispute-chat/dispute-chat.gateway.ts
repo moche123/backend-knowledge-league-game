@@ -103,6 +103,19 @@ export class DisputeChatGateway
     return { ok: true };
   }
 
+  @SubscribeMessage('chat:typing')
+  async writing(
+    @ConnectedSocket() socket: AuthenticatedSocket,
+    @MessageBody() body: { eventId: string; matchId: string },
+  ) {
+    await this.disputeChatService.writeMessageLive(
+      body.eventId,
+      body.matchId,
+      socket.data.user,
+    );
+    return { ok: true };
+  }
+
   @SubscribeMessage('chat:send')
   async sendChat(
     @ConnectedSocket() socket: AuthenticatedSocket,
