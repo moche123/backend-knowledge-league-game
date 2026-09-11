@@ -417,6 +417,15 @@ export class MatchService {
     await this.answerRepository.save(answer);
 
     await this.matchScoringService.computeMatchResult(match);
+    // Self-healing: compares this match's (possibly just-recomputed) winner
+    // against whichever downstream stage match already exists for it, and
+    // fixes any drift — including drift left over from before this call. If
+    // the downstream match already advanced past pending, this throws (409)
+    // before the new result — or the ranking ledger — gets persisted, so the
+    // match stays showing its previous result until the admin fixes the
+    // downstream match and retries.
+    await this.stageService.reconcileWinnerChange(match);
+
     const saved = await this.matchRepository.save(match);
 
     const stage = await this.stageRepository.findOne({
@@ -425,6 +434,18 @@ export class MatchService {
     if (stage) {
       await this.rankingService.recordMatchResult(saved, stage.eventId);
     }
+
+    // A winner correction can be what UNBLOCKS the bracket — e.g. the match
+    // originally closed in an exact tie (winnerId null), which made
+    // checkAndAdvance's winners list too short to pair and silently no-op
+    // (logged, not thrown) the first time. Retrying here is a safe no-op in
+    // the normal case, since drawStageMatches skips a stage that already has
+    // a seed.
+    await this.stageService.checkAndAdvance(match.stageId).catch((error) => {
+      this.logger.error(
+        `checkAndAdvance failed for stage ${match.stageId}: ${(error as Error).message}`,
+      );
+    });
 
     return answer;
   }
@@ -436,9 +457,11 @@ export class MatchService {
   // is a human judgment call layered on top, same as an admin overriding a
   // referee's call in a real tournament. Ranking points were already
   // recorded from scoreA/scoreB when the match closed and aren't affected
-  // by this — only the winner of record (and, downstream, whichever
-  // already-drawn bracket stage a human notices needs a manual fix, same
-  // documented limitation as overrideAnswerScore/reopen).
+  // by this — only the winner of record. If an already-drawn downstream
+  // stage still has that winner's match pending, reconcileWinnerChange
+  // swaps it automatically; if it's already advanced past pending, this
+  // throws instead of leaving two different "truths" in the bracket (see
+  // StageService.reconcileWinnerChange). reopen() still has no such guard.
   async declareWinner(
     eventId: string,
     matchId: string,
@@ -472,6 +495,11 @@ export class MatchService {
     }
 
     match.winnerId = dto.winnerId;
+    // Same self-healing downstream-consistency check as overrideAnswerScore:
+    // fixes any drift between this match's winner/loser and whichever of its
+    // two players currently sits in the downstream stage's match, or blocks
+    // (409) if that downstream match already advanced past pending.
+    await this.stageService.reconcileWinnerChange(match);
     const saved = await this.matchRepository.save(match);
 
     const winner = await this.userRepository.findOne({
@@ -485,6 +513,16 @@ export class MatchService {
         text: `[System] Winner overturned to ${winner?.name ?? dto.winnerId} following dispute resolution.`,
       }),
     );
+
+    // Same as overrideAnswerScore: this is the resolution for a match that
+    // closed with no winner (exact tie) and got stuck — checkAndAdvance
+    // originally no-op'd for lack of a full winners list. Retrying here is a
+    // safe no-op once the bracket already advanced correctly.
+    await this.stageService.checkAndAdvance(match.stageId).catch((error) => {
+      this.logger.error(
+        `checkAndAdvance failed for stage ${match.stageId}: ${(error as Error).message}`,
+      );
+    });
 
     return saved;
   }
@@ -613,7 +651,7 @@ export class MatchService {
         `Cannot end a match with status "${match.status}"`,
       );
     }
-    await this.evaluateCurrentQuestion(match);
+    await this.evaluatePosition(match.id, match.currentQuestionPosition);
     return this.closeMatch(match);
   }
 
@@ -1034,9 +1072,15 @@ export class MatchService {
         currentQuestionDeadline: LessThan(new Date()),
       },
     });
-    for (const match of overdueMatches) {
-      await this.advanceQuestion(match);
-    }
+    await Promise.all(
+      overdueMatches.map((match) =>
+        this.advanceQuestion(match).catch((error) =>
+          this.logger.error(
+            `Failed to advance overdue match ${match.id}: ${(error as Error).message}`,
+          ),
+        ),
+      ),
+    );
   }
 
   private assertIsParticipant(match: Match, playerId: string): void {
@@ -1062,24 +1106,33 @@ export class MatchService {
     });
   }
 
-  private async evaluateCurrentQuestion(match: Match): Promise<void> {
-    if (!match.currentQuestionPosition) return;
+  private async evaluatePosition(
+    matchId: string,
+    position: number | null,
+  ): Promise<void> {
+    if (!position) return;
     const currentMatchQuestion = await this.matchQuestionRepository.findOne({
-      where: { matchId: match.id, position: match.currentQuestionPosition },
+      where: { matchId, position },
     });
     if (currentMatchQuestion) {
       await this.matchScoringService.evaluateQuestion(currentMatchQuestion);
     }
   }
 
+  // The just-finished question's AI evaluation must never block the player
+  // from seeing the next one (it doesn't affect anything until the match
+  // closes) — evaluate it in the background instead of awaiting it here.
+  // Exception: the LAST question, where closeMatch()'s score sum needs the
+  // result right away, so that one case still awaits it.
   private async advanceQuestion(match: Match): Promise<Match> {
-    await this.evaluateCurrentQuestion(match);
+    const finishedPosition = match.currentQuestionPosition;
 
     const totalQuestions = await this.matchQuestionRepository.count({
       where: { matchId: match.id },
     });
     const nextPosition = (match.currentQuestionPosition ?? 0) + 1;
     if (nextPosition > totalQuestions) {
+      await this.evaluatePosition(match.id, finishedPosition);
       return this.closeMatch(match);
     }
 
@@ -1087,8 +1140,15 @@ export class MatchService {
       where: { matchId: match.id, position: nextPosition },
     });
     if (!nextMatchQuestion) {
+      await this.evaluatePosition(match.id, finishedPosition);
       return this.closeMatch(match);
     }
+
+    void this.evaluatePosition(match.id, finishedPosition).catch((error) =>
+      this.logger.error(
+        `Background evaluation failed for match ${match.id} position ${finishedPosition}: ${(error as Error).message}`,
+      ),
+    );
 
     nextMatchQuestion.activatedAt = new Date();
     await this.matchQuestionRepository.save(nextMatchQuestion);

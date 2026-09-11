@@ -9,6 +9,9 @@ export interface LeaderboardRow {
   userId: string;
   name: string;
   totalPoints: number;
+  matchesPlayed: number;
+  eventsPlayed: number;
+  winRate: number; // 0-100, rounded — share of ledger matches this user won
 }
 
 @Injectable()
@@ -79,9 +82,13 @@ export class RankingService {
     const query = this.rankingRepository
       .createQueryBuilder('rh')
       .innerJoin('users', 'u', 'u.id = rh.user_id')
+      .innerJoin('matches', 'm', 'm.id = rh.match_id')
       .select('rh.user_id', 'userId')
       .addSelect('u.name', 'name')
       .addSelect('SUM(rh.points_earned)', 'totalPoints')
+      .addSelect('COUNT(DISTINCT rh.event_id)', 'eventsPlayed')
+      .addSelect('COUNT(rh.match_id)', 'matchesPlayed')
+      .addSelect('COUNT(CASE WHEN m.winner_id = rh.user_id THEN 1 END)', 'wins')
       .groupBy('rh.user_id')
       .addGroupBy('u.name')
       .orderBy('"totalPoints"', 'DESC');
@@ -94,11 +101,22 @@ export class RankingService {
       userId: string;
       name: string;
       totalPoints: string;
+      eventsPlayed: string;
+      matchesPlayed: string;
+      wins: string;
     }>();
-    return rows.map((row) => ({
-      userId: row.userId,
-      name: row.name,
-      totalPoints: Number(row.totalPoints),
-    }));
+    return rows.map((row) => {
+      const matchesPlayed = Number(row.matchesPlayed);
+      const wins = Number(row.wins);
+      return {
+        userId: row.userId,
+        name: row.name,
+        totalPoints: Number(row.totalPoints),
+        eventsPlayed: Number(row.eventsPlayed),
+        matchesPlayed,
+        winRate:
+          matchesPlayed > 0 ? Math.round((wins / matchesPlayed) * 100) : 0,
+      };
+    });
   }
 }

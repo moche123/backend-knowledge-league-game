@@ -363,7 +363,7 @@ export class MatchController {
   @ApiOperation({
     summary: "Overturn a closed/walkover match's winner (dispute resolution)",
     description:
-      "Admin, or the match's own assigned referee. Only changes winnerId — scoreA/scoreB stay as the AI's assessment. Logs a system message in the match's dispute chat. Same documented limitation as overrideAnswerScore/reopen: doesn't propagate to bracket stages already drawn from the old winner.",
+      "Admin, or the match's own assigned referee. Only changes winnerId — scoreA/scoreB stay as the AI's assessment. Logs a system message in the match's dispute chat. Self-healing bracket propagation: if an already-drawn downstream stage's match is still pending, its participant is swapped to match; if it already advanced past pending, this throws 409 instead (fix that match by hand first). Also retries drawing the next stage in case this was resolving an exact tie that had left it stuck.",
   })
   @ApiParam({ name: 'matchId' })
   @Roles(UserRole.ADMIN, UserRole.REFEREE)

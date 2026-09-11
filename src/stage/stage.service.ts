@@ -31,6 +31,12 @@ const NEXT_STAGE_FROM_WINNERS: Partial<Record<StageType, StageType>> = {
   quarterfinal: 'semifinal',
 };
 
+interface ReconcileTarget {
+  match: Match;
+  slot: 'playerAId' | 'playerBId';
+  newPlayerId: string;
+}
+
 @Injectable()
 export class StageService {
   constructor(
@@ -225,6 +231,23 @@ export class StageService {
       );
     if (!allTerminal) return;
 
+    // A stage that feeds a next one needs every match's winnerId to draw a
+    // full, correctly-paired next round. An exact tie leaves one closed
+    // match with winnerId null (see CLAUDE.md) — drawing anyway would either
+    // throw on an odd winners count, or worse, silently draw a SHORT next
+    // stage on an even count, permanently dropping that match's two players.
+    // Instead, just wait: don't consider the stage advance-ready until a
+    // referee/admin resolves the tie (declareWinner), which retries this.
+    // final/third_place don't feed anywhere, so a tie there doesn't block —
+    // the event can still finish without a declared champion.
+    if (
+      stage.type !== 'final' &&
+      stage.type !== 'third_place' &&
+      matches.some((match) => !match.winnerId)
+    ) {
+      return;
+    }
+
     await this.dataSource.transaction(async (manager) => {
       if (stage.type === 'final' || stage.type === 'third_place') {
         await this.maybeFinishEvent(manager, stage.eventId);
@@ -289,6 +312,123 @@ export class StageService {
       ...stage,
       matches: matches.filter((match) => match.stageId === stage.id),
     }));
+  }
+
+  // Called by MatchService whenever a CLOSED/WALKOVER match's winner is set
+  // or corrected (admin override / referee dispute resolution). Self-healing
+  // by design — it doesn't diff "old vs new winner" from this one request
+  // (that missed drift left over from a stale request, a manual DB fix, or
+  // any other out-of-band change); instead it always compares the match's
+  // CURRENT winner/loser against whichever of this match's two players is
+  // currently sitting in the downstream stage's match, and corrects it if
+  // they disagree — idempotent, safe to call on every override even when
+  // this particular call didn't change anything. Only touches a downstream
+  // match that's still `pending` (nobody played it yet); if it already
+  // started/closed, blocks the whole winner change instead of silently
+  // leaving two different "truths" in the bracket — the admin has to sort
+  // out the downstream match by hand first.
+  async reconcileWinnerChange(match: Match): Promise<void> {
+    if (!match.winnerId) return;
+
+    const stage = await this.stageRepository.findOne({
+      where: { id: match.stageId },
+    });
+    if (!stage || stage.type === 'final' || stage.type === 'third_place') {
+      return;
+    }
+
+    const winnerId = match.winnerId;
+    const loserId =
+      winnerId === match.playerAId ? match.playerBId : match.playerAId;
+    const combatantIds = [match.playerAId, match.playerBId].filter(
+      (id): id is string => !!id,
+    );
+
+    let winnerTarget: ReconcileTarget | null;
+    let loserTarget: ReconcileTarget | null = null;
+
+    if (stage.type === 'semifinal') {
+      const finalStage = await this.stageRepository.findOne({
+        where: { eventId: stage.eventId, type: 'final' },
+      });
+      const thirdPlaceStage = await this.stageRepository.findOne({
+        where: { eventId: stage.eventId, type: 'third_place' },
+      });
+      winnerTarget = await this.findReconcileTarget(
+        finalStage,
+        combatantIds,
+        winnerId,
+      );
+      loserTarget = await this.findReconcileTarget(
+        thirdPlaceStage,
+        combatantIds,
+        loserId,
+      );
+    } else {
+      const nextType = NEXT_STAGE_FROM_WINNERS[stage.type];
+      if (!nextType) return;
+      const nextStage = await this.stageRepository.findOne({
+        where: { eventId: stage.eventId, type: nextType },
+      });
+      winnerTarget = await this.findReconcileTarget(
+        nextStage,
+        combatantIds,
+        winnerId,
+      );
+    }
+
+    for (const target of [winnerTarget, loserTarget]) {
+      if (!target) continue;
+      target.match[target.slot] = target.newPlayerId;
+      await this.matchRepository.save(target.match);
+    }
+  }
+
+  private async findReconcileTarget(
+    stage: Stage | null,
+    combatantIds: string[],
+    correctPlayerId: string | null,
+  ): Promise<ReconcileTarget | null> {
+    if (
+      !stage ||
+      !stage.seed ||
+      !correctPlayerId ||
+      combatantIds.length === 0
+    ) {
+      return null; // not drawn yet — nothing to fix
+    }
+
+    // Find the downstream match that already has EITHER of this origin
+    // match's two players in it — whichever one advanced there, correctly
+    // or not — rather than searching for one specific old id. That's what
+    // makes this self-healing regardless of how the downstream match got
+    // out of sync.
+    const downstreamMatch = await this.matchRepository.findOne({
+      where: [
+        { stageId: stage.id, playerAId: In(combatantIds) },
+        { stageId: stage.id, playerBId: In(combatantIds) },
+      ],
+    });
+    if (!downstreamMatch) return null;
+
+    const slot: 'playerAId' | 'playerBId' | null = combatantIds.includes(
+      downstreamMatch.playerAId ?? '',
+    )
+      ? 'playerAId'
+      : combatantIds.includes(downstreamMatch.playerBId ?? '')
+        ? 'playerBId'
+        : null;
+    if (!slot) return null;
+
+    if (downstreamMatch[slot] === correctPlayerId) return null; // already consistent
+
+    if (downstreamMatch.status !== MatchStatus.PENDING) {
+      throw new ConflictException(
+        `Cannot change this match's winner: it already advanced to a "${stage.type}" match that is no longer pending (status "${downstreamMatch.status}") — fix that match by hand first.`,
+      );
+    }
+
+    return { match: downstreamMatch, slot, newPlayerId: correctPlayerId };
   }
 
   private async drawStageMatches(
